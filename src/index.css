@@ -191,7 +191,7 @@ img { display: block; max-width: 100%; }
 
 /* ---------- BOTTOM NAV ---------- */
 .bottom-nav {
-  position: absolute; bottom: 0; left: 0; right: 0;
+  position: fixed; bottom: 0; left: 0; right: 0;
   height: var(--nav-h);
   background: var(--surface); border-top: 1px solid var(--border);
   display: flex; align-items: center;
@@ -801,7 +801,7 @@ body {
 #app {
   width: 100%;
   max-width: 430px; /* 일반적인 스마트폰 화면 최대 너비 (iPhone Pro Max 기준) */
-  min-height: 100vh;
+  height: 100dvh;
   background-color: #ffffff;
   position: relative;
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.1); /* 폰 테두리처럼 그림자 효과 */
