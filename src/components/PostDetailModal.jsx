@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+// 🚨 getDoc 대신 onSnapshot 추가!
+import { doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../firebase'; 
 import RouteMap from './RouteMap';
 import { formatTime, USERS } from '../data';
 
@@ -10,27 +11,44 @@ const PostDetailModal = ({ postId, onClose }) => {
 
   useEffect(() => {
     if (!postId) return;
+    setIsLoading(true);
+    
+    const docRef = doc(db, 'posts', postId);
 
-    const fetchPostDetail = async () => {
-      setIsLoading(true);
-      try {
-        const docRef = doc(db, 'posts', postId);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          setPost({ id: docSnap.id, ...docSnap.data() });
-        } else {
-          console.log("해당 게시물이 없습니다!");
-        }
-      } catch (error) {
-        console.error("게시물 상세 불러오기 실패:", error);
-      } finally {
-        setIsLoading(false);
+    // 🚨 해당 게시물의 변화를 실시간 감시하는 리스너!
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setPost({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        console.log("해당 게시물이 없습니다!");
       }
-    };
+      setIsLoading(false);
+    }, (error) => {
+      console.error("모달 실시간 데이터 오류:", error);
+      setIsLoading(false);
+    });
 
-    fetchPostDetail();
+    return () => unsubscribe(); 
   }, [postId]);
+
+  const handleToggleLike = async () => {
+    const user = auth.currentUser;
+    if (!user || !post) return;
+
+    const postRef = doc(db, 'posts', post.id);
+    const currentLikedBy = post.likedBy || [];
+    const isLiked = currentLikedBy.includes(user.uid);
+
+    // 수동 상태 변경 코드 삭제. DB에 쏘기만 하면 알아서 화면 렌더링 됩니다.
+    try {
+      await updateDoc(postRef, {
+        likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likes: increment(isLiked ? -1 : 1)
+      });
+    } catch (error) {
+      console.error("모달 좋아요 업데이트 실패:", error);
+    }
+  };
 
   const handleOverlayClick = (e) => {
     if (e.target.className === 'modal-overlay') {
@@ -40,9 +58,13 @@ const PostDetailModal = ({ postId, onClose }) => {
 
   if (!postId) return null;
 
-  // 🚨 핵심 수정: 파이어베이스 데이터를 먼저 확인하고, 없으면 가짜 데이터를 쓰도록 변경
   const userName = post?.authorName || USERS?.find(u => u.id === post?.userId)?.name || '여행자';
   const userAvatar = post?.authorAvatar || USERS?.find(u => u.id === post?.userId)?.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback';
+  
+  const isLiked = post?.likedBy?.includes(auth.currentUser?.uid);
+  
+  // 🚨 UI에서 마이너스 완전 차단!
+  const likeCount = Math.max(0, post?.likes || 0); 
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -57,11 +79,7 @@ const PostDetailModal = ({ postId, onClose }) => {
         ) : post ? (
           <>
             <div className="modal-user-row">
-              <img 
-                className="modal-avatar" 
-                src={userAvatar} 
-                alt="프로필" 
-              />
+              <img className="modal-avatar" src={userAvatar} alt="프로필" />
               <div className="modal-user-info">
                 <div className="modal-username">{userName}</div>
                 <div className="modal-user-meta">
@@ -114,7 +132,9 @@ const PostDetailModal = ({ postId, onClose }) => {
             </div>
 
             <div className="modal-actions">
-              <button className="modal-action-btn"><i className="far fa-heart"></i> {post.likes || 0}</button>
+              <button className={`modal-action-btn ${isLiked ? 'liked' : ''}`} onClick={handleToggleLike}>
+                <i className={isLiked ? "fas fa-heart" : "far fa-heart"} style={{ color: isLiked ? '#e63946' : 'inherit' }}></i> {likeCount}
+              </button>
               <button className="modal-action-btn"><i className="far fa-comment"></i> {post.comments || 0}</button>
               <button className="modal-action-btn"><i className="far fa-bookmark"></i> {post.saves || 0}</button>
             </div>
@@ -129,7 +149,7 @@ const PostDetailModal = ({ postId, onClose }) => {
             
             <div className="modal-comments">
               <div className="add-comment-row">
-                <img className="comment-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=my" alt="내 프로필" />
+                <img className="comment-avatar" src={auth.currentUser?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=my"} alt="내 프로필" />
                 <input type="text" placeholder="멋진 코스네요! 댓글을 남겨보세요..." />
                 <button className="comment-send-btn"><i className="fas fa-paper-plane"></i></button>
               </div>

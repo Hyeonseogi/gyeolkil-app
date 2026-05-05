@@ -1,36 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import RouteMap from '../components/RouteMap';
 import { formatTime, USERS } from '../data';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+// 🚨 getDocs 대신 onSnapshot을 불러옵니다!
+import { collection, query, orderBy, doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 
-const HomeTab = ({ following, onToggleLike, onOpenModal }) => {
+const HomeTab = ({ following, onOpenModal }) => {
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    const fetchPosts = async () => {
-      setIsLoading(true);
-      try {
-        const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        
-        const fetchedPosts = [];
-        querySnapshot.forEach((doc) => {
-          fetchedPosts.push({ id: doc.id, ...doc.data() });
-        });
-        
-        setPosts(fetchedPosts);
-      } catch (error) {
-        console.error("게시물 불러오기 실패:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setIsLoading(true);
+    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    
+    // 🚨 핵심 포인트: DB에 변화가 생기면 알아서 다시 실행되는 마법의 리스너
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedPosts = [];
+      querySnapshot.forEach((doc) => {
+        fetchedPosts.push({ id: doc.id, ...doc.data() });
+      });
+      setPosts(fetchedPosts);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("게시물 실시간 불러오기 실패:", error);
+      setIsLoading(false);
+    });
 
-    fetchPosts();
+    // 컴포넌트가 꺼질 때 리스너를 해제해 줘야 메모리가 새지 않습니다.
+    return () => unsubscribe(); 
   }, []);
+
+  const handleToggleLike = async (e, postId, currentLikedBy = []) => {
+    e.stopPropagation(); 
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const postRef = doc(db, 'posts', postId);
+    const isLiked = currentLikedBy.includes(user.uid); 
+
+    // 화면 계산 코드는 다 지웠습니다! DB에 쏘기만 하면 onSnapshot이 화면을 즉시 고쳐줍니다.
+    try {
+      await updateDoc(postRef, {
+        likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likes: increment(isLiked ? -1 : 1)
+      });
+    } catch (error) {
+      console.error("좋아요 서버 반영 실패:", error);
+    }
+  };
 
   let displayPosts = posts;
   if (filter === 'following') {
@@ -61,16 +79,20 @@ const HomeTab = ({ following, onToggleLike, onOpenModal }) => {
 
       <div id="feed-container">
         {isLoading ? (
-          <div className="loading-spinner">게시물을 불러오는 중...</div>
+          <div className="loading-spinner">게시물을 실시간으로 불러오는 중...</div>
         ) : displayPosts.length === 0 ? (
           <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
             <p>게시물이 없습니다.</p>
           </div>
         ) : (
           displayPosts.map(post => {
-            // 🚨 핵심 수정: 파이어베이스에 저장된 진짜 이름/프사를 최우선으로 사용!
             const userName = post.authorName || USERS.find(u => u.id === post.userId)?.name || '여행자';
             const userAvatar = post.authorAvatar || USERS.find(u => u.id === post.userId)?.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback';
+            
+            const isLiked = post.likedBy?.includes(auth.currentUser?.uid);
+            
+            // 🚨 무슨 일이 있어도 화면에 마이너스가 뜨는 것을 방어!
+            const likeCount = Math.max(0, post.likes || 0); 
             
             return (
               <article key={post.id} className="post-card" onClick={() => onOpenModal(post.id)}>
@@ -96,8 +118,8 @@ const HomeTab = ({ following, onToggleLike, onOpenModal }) => {
                 </div>
 
                 <div className="post-actions" onClick={(e) => e.stopPropagation()}>
-                  <button className={`action-btn ${post.liked ? 'liked' : ''}`} onClick={() => onToggleLike(post.id)}>
-                    <i className={post.liked ? "fas fa-heart" : "far fa-heart"}></i> <span className="like-count">{post.likes || 0}</span>
+                  <button className={`action-btn ${isLiked ? 'liked' : ''}`} onClick={(e) => handleToggleLike(e, post.id, post.likedBy)}>
+                    <i className={isLiked ? "fas fa-heart" : "far fa-heart"}></i> <span className="like-count">{likeCount}</span>
                   </button>
                   <button className="action-btn" onClick={() => onOpenModal(post.id)}>
                     <i className="far fa-comment"></i> {post.comments || 0}
