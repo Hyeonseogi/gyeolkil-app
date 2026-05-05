@@ -1,49 +1,44 @@
 import React from 'react';
+// 🆕 파이어베이스 로그인 전용 패키지 불러오기
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { auth } from '../firebase';
 
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = () => {
+  // 구글 로그인 팝업 띄우는 함수
+  const handleGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      // 파이어베이스야, 구글 로그인 팝업창을 띄워줘!
+      const result = await signInWithPopup(auth, provider);
+      
+      // 로그인이 성공하면 구글이 유저 정보를 던져줍니다.
+      const user = result.user;
+      console.log("🎉 로그인 성공!", user.displayName, user.email);
+      
+      // (참고) 로그인이 성공하면 App.jsx의 onAuthStateChanged가 
+      // 이를 자동으로 감지해서 화면을 넘겨주기 때문에 여기서 별도의 처리를 안 해도 됩니다.
+    } catch (error) {
+      console.error("로그인 에러:", error);
+      alert("로그인 중 문제가 발생했습니다.");
+    }
+  };
+
   return (
-    <div id="splash-screen" style={{ opacity: 1, transition: 'opacity 0.5s', display: 'flex', zIndex: 9999 }}>
+    <div id="splash-screen">
       <div className="splash-bg"></div>
-      <div className="splash-content" style={{ width: '100%', padding: '0 24px' }}>
-        
-        <div className="splash-logo" style={{ marginBottom: '10px' }}>
-          <span className="logo-emoji" style={{ fontSize: '3.5rem' }}>🗺️</span>
-          <h1 className="logo-text" style={{ fontSize: '3rem' }}>곁길</h1>
+      <div className="splash-content">
+        <div className="splash-logo">
+          <span className="logo-emoji">🗺️</span>
+          <span className="logo-text">곁길</span>
         </div>
-        <p className="splash-tagline" style={{ marginBottom: '50px' }}>
-          나의 여행을 기록하고<br/>공유하고 공감하다
+        <p className="splash-tagline">
+          발길 닿는 곳마다 기록하는<br />나만의 여행 코스
         </p>
-
-        {/* 카카오 로그인 버튼 (노란색) */}
-        <button 
-          onClick={onLogin}
-          style={{
-            width: '100%', padding: '14px', borderRadius: '12px',
-            backgroundColor: '#FEE500', color: '#000000',
-            fontWeight: 'bold', fontSize: '1rem', border: 'none',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: '8px', marginBottom: '12px', cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }}
-        >
-          <i className="fas fa-comment"></i> 카카오로 시작하기
+        {/* 버튼을 누르면 구글 로그인 팝업 함수 실행! */}
+        <button className="splash-btn" onClick={handleGoogleLogin}>
+          <i className="fab fa-google" style={{ marginRight: '8px' }}></i>
+          구글 계정으로 시작하기
         </button>
-
-        {/* 구글 로그인 버튼 (흰색) */}
-        <button 
-          onClick={onLogin}
-          style={{
-            width: '100%', padding: '14px', borderRadius: '12px',
-            backgroundColor: '#FFFFFF', color: '#3c4043',
-            fontWeight: 'bold', fontSize: '1rem', border: '1px solid #dadce0',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: '8px', cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }}
-        >
-          <i className="fab fa-google" style={{ color: '#EA4335' }}></i> Google로 시작하기
-        </button>
-        
       </div>
     </div>
   );
