@@ -1,28 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Map, Polyline, CustomOverlayMap } from 'react-kakao-maps-sdk';
 
-const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
+// 🚨 props에 detailedPath 추가 (기본값 빈 배열)
+const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260px' }) => {
   const [map, setMap] = useState(null);
   
-  // 유효한 좌표가 있는 장소만 필터링
   const validRoute = route.filter(spot => spot && spot.lat && spot.lng);
 
   useEffect(() => {
     if (!map || validRoute.length === 0) return;
 
-    // 🚨 핵심 개선: 장소가 딱 1개일 때는 억지로 Bounds를 잡지 않고 적당한 줌 레벨 지정
     if (validRoute.length === 1) {
       const singlePoint = new window.kakao.maps.LatLng(validRoute[0].lat, validRoute[0].lng);
       map.setCenter(singlePoint);
-      map.setLevel(5); // 1개일 때 보기 좋은 줌 레벨
+      map.setLevel(5); 
       return;
     }
 
-    // 장소가 2개 이상일 때는 기존처럼 모든 마커가 보이도록 자동 줌인/아웃
     const bounds = new window.kakao.maps.LatLngBounds();
-    validRoute.forEach(spot => bounds.extend(new window.kakao.maps.LatLng(spot.lat, spot.lng)));
     
-    // 장소명이 잘리지 않도록 여백(padding) 적용
+    // Bounds(화면 줌)는 구불구불한 도로가 아니라, '마커' 기준(validRoute)으로 잡아야 화면이 예쁩니다.
+    validRoute.forEach(spot => bounds.extend(new window.kakao.maps.LatLng(spot.lat, spot.lng)));
     map.setBounds(bounds, 48, 48, 48, 48);
   }, [map, validRoute]);
 
@@ -30,22 +28,25 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
     return <div style={{width, height, background: 'var(--bg)', borderRadius: '16px', border: '1px solid var(--border)'}} />;
   }
 
-  const path = validRoute.map(spot => ({ lat: spot.lat, lng: spot.lng }));
+  // 🚨 핵심 로직: detailedPath 데이터가 들어오면 그걸로 그리고, 없으면 기존처럼 마커(route)끼리 직선 연결!
+  const polylinePath = detailedPath && detailedPath.length > 0 
+    ? detailedPath.map(p => ({ lat: p.lat, lng: p.lng }))
+    : validRoute.map(spot => ({ lat: spot.lat, lng: spot.lng }));
 
   return (
     <Map 
-      center={path[0]} 
+      center={{ lat: validRoute[0].lat, lng: validRoute[0].lng }} 
       style={{ width, height, borderRadius: '16px', overflow: 'hidden' }} 
       onCreate={setMap}
-      draggable={false} zoomable={false} disableDoubleClickZoom={true}
+      draggable={true} zoomable={true} disableDoubleClickZoom={false}
     >
-      {/* 🖤 경로 선: 투명도를 주어 지도의 도로와 차별화 */}
-      {path.length > 1 && (
+      {/* 🖤 경로 선 그리기 (직선 or 곡선 자동 판별됨) */}
+      {polylinePath.length > 1 && (
         <Polyline
-          path={[path]}
+          path={[polylinePath]} // react-kakao-maps-sdk에서는 배열 안에 배열을 넣어야 합니다.
           strokeWeight={4}
-          strokeColor={"#2C2A29"} 
-          strokeOpacity={0.6}
+          strokeColor={"#52B788"} // 선 색상을 앱 테마색으로 살짝 변경 (기존 #2C2A29)
+          strokeOpacity={0.8}
           strokeStyle={"solid"}
         />
       )}
@@ -54,11 +55,9 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
         <CustomOverlayMap 
           key={i} 
           position={{ lat: spot.lat, lng: spot.lng }}
-          yAnchor={1.1} // 마커 위치를 위로 살짝 띄움
+          yAnchor={1.1} 
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-            
-            {/* 장소명 커스텀 태그 */}
             {spot.name && (
               <div style={{
                 background: 'rgba(255, 255, 255, 0.85)',
@@ -76,7 +75,6 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
               </div>
             )}
             
-            {/* 포인트 마커 */}
             <div style={{
               background: '#2C2A29', 
               color: '#fff', 
@@ -89,7 +87,6 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
             }}>
               {i + 1}
             </div>
-            
           </div>
         </CustomOverlayMap>
       ))}

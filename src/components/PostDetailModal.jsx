@@ -105,7 +105,7 @@ const PostDetailModal = ({ postId, onClose }) => {
             <div className="modal-route-section">
               <h3>여행 경로</h3>
               <div className="modal-route-canvas-wrap">
-                <RouteMap route={post.route || []} height="200px" />
+                <RouteMap route={post.route} detailedPath={post.detailedPath} height="160px" />
               </div>
               <div className="modal-route-stops">
                 {post.route?.map((spot, idx) => (

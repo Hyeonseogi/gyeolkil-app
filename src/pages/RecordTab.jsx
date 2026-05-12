@@ -38,6 +38,24 @@ const RecordTab = ({ onPublish }) => {
     setDrafts(savedDrafts);
   }, []);
 
+  // 🚨 [NEW] 수동 임시저장 함수 추가
+  const handleSaveDraft = () => {
+    const draftSpots = spots.map(({ file, ...rest }) => rest);
+    
+    const newDraft = {
+      id: 'draft_' + Date.now(),
+      title: title,
+      body: body,
+      spots: draftSpots,
+      savedAt: Date.now()
+    };
+
+    const existingDrafts = JSON.parse(localStorage.getItem('gyeolkil_drafts') || '[]');
+    localStorage.setItem('gyeolkil_drafts', JSON.stringify([newDraft, ...existingDrafts]));
+
+    alert("현재까지의 작성 내용이 기기에 안전하게 임시저장 되었습니다! 💾");
+  };
+
   const handleCameraUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -71,7 +89,7 @@ const RecordTab = ({ onPublish }) => {
 
   const handleGalleryUpload = async (e) => {
     const files = Array.from(e.target.files);
-    if (files.length === 0) return;
+    if (!files.length) return;
 
     setIsPublishing(true); 
     const newSpots = [];
@@ -108,18 +126,12 @@ const RecordTab = ({ onPublish }) => {
         console.error('이미지 처리 실패:', err);
         missingGpsCount++;
         const photoUrl = URL.createObjectURL(file);
-        newSpots.push({
-          name: `장소 ${spots.length + i + 1}`,
-          lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788', timestamp: file.lastModified
-        });
+        newSpots.push({ name: `장소 ${spots.length + i + 1}`, lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788', timestamp: file.lastModified });
       }
     }
 
-    if (missingGpsCount > 0) {
-      alert(`${missingGpsCount}장의 사진에 위치 정보가 없어 기본 위치로 설정되었습니다.`);
-    }
+    if (missingGpsCount > 0) alert(`${missingGpsCount}장의 사진에 위치 정보가 없어 기본 위치로 설정되었습니다.`);
 
-    // 시간순 정렬 및 이름 재부여
     const allSpots = [...spots, ...newSpots].sort((a, b) => a.timestamp - b.timestamp);
     const renamedSpots = allSpots.map((s, idx) => ({ ...s, name: s.name.startsWith('장소') ? `장소 ${idx + 1}` : s.name }));
 
@@ -147,10 +159,8 @@ const RecordTab = ({ onPublish }) => {
     if (dragItem.current === null || dragOverItem.current === null) return;
     const copySpots = [...spots];
     const dragItemContent = copySpots[dragItem.current];
-    
     copySpots.splice(dragItem.current, 1);
     copySpots.splice(dragOverItem.current, 0, dragItemContent);
-    
     dragItem.current = null;
     dragOverItem.current = null;
     setSpots(copySpots);
@@ -164,14 +174,9 @@ const RecordTab = ({ onPublish }) => {
     if (!user) return alert("로그인 정보가 없습니다. 다시 로그인해주세요.");
 
     if (!navigator.onLine) {
-      const draftSpots = spots.map(({ file, ...rest }) => rest);
-      const newDraft = { id: 'draft_' + Date.now(), title, body, spots: draftSpots, pendingUpload: true };
-      const savedDrafts = JSON.parse(localStorage.getItem('gyeolkil_drafts') || '[]');
-      localStorage.setItem('gyeolkil_drafts', JSON.stringify([...savedDrafts, newDraft]));
-      
+      handleSaveDraft();
       alert("인터넷이 끊겨있어 기기에 안전하게 임시 저장되었습니다! 📡 (인터넷 연결 시 업로드 가능)");
-      setStep(1);
-      setTitle(''); setBody(''); setSpots([]);
+      setStep(1); setTitle(''); setBody(''); setSpots([]);
       return; 
     }
 
@@ -192,6 +197,39 @@ const RecordTab = ({ onPublish }) => {
 
       const spotsForDB = uploadedSpots.map(({ file, ...rest }) => rest);
 
+      // 🚨 [NEW] 카카오 자동차 길찾기 API 호출하여 상세 도로 경로(detailedPath) 추출
+      let detailedPath = [];
+      for (let i = 0; i < spotsForDB.length - 1; i++) {
+        const start = spotsForDB[i];
+        const end = spotsForDB[i + 1];
+        
+        try {
+          const res = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?origin=${start.lng},${start.lat}&destination=${end.lng},${end.lat}`, {
+            headers: { Authorization: `KakaoAK ${import.meta.env.VITE_KAKAO_REST_KEY}` }
+          });
+          const data = await res.json();
+          
+          if (data.routes && data.routes.length > 0) {
+            data.routes[0].sections.forEach(section => {
+              section.roads.forEach(road => {
+                const vertexes = road.vertexes;
+                for (let j = 0; j < vertexes.length; j += 2) {
+                  detailedPath.push({ lng: vertexes[j], lat: vertexes[j+1] });
+                }
+              });
+            });
+          } else {
+            detailedPath.push({ lat: start.lat, lng: start.lng });
+            detailedPath.push({ lat: end.lat, lng: end.lng });
+          }
+        } catch (apiError) {
+          console.error("길찾기 API 오류:", apiError);
+          detailedPath.push({ lat: start.lat, lng: start.lng });
+          detailedPath.push({ lat: end.lat, lng: end.lng });
+        }
+      }
+
+      // 파이어베이스 최종 저장 (detailedPath 추가됨)
       await addDoc(collection(db, "posts"), {
         userId: user.uid, 
         authorName: user.displayName || '여행자',
@@ -204,16 +242,12 @@ const RecordTab = ({ onPublish }) => {
         comments: 0,
         saves: 0,
         route: spotsForDB,
+        detailedPath: detailedPath, // 추가된 경로
         likedBy: [] 
       });
 
       alert("게시물이 성공적으로 업로드되었습니다! 🎉");
-      
-      setStep(1);
-      setTitle('');
-      setBody('');
-      setSpots([]);
-      
+      setStep(1); setTitle(''); setBody(''); setSpots([]);
       if (onPublish) onPublish();
 
     } catch (error) {
@@ -307,14 +341,11 @@ const RecordTab = ({ onPublish }) => {
                                <option value="walk">🚶 도보 (약 {estTravelTime}분)</option>
                                <option value="car">🚗 차/대중교통 (약 {estTravelTime}분)</option>
                              </select>
-                             
                              <span style={{ color: '#ccc' }}>|</span>
-                             
                              <span style={{ color: 'var(--text-sub)' }}>
                                ☕ 이 장소에서 <strong>약 {stayTime}분</strong> 머무름
                              </span>
                            </div>
-                           
                            <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
                          </div>
                        );
@@ -369,21 +400,21 @@ const RecordTab = ({ onPublish }) => {
                   <button onClick={() => cameraInputRef.current.click()} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}><i className="fas fa-camera"></i> + 카메라</button>
                   <button onClick={() => galleryInputRef.current.click()} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}><i className="fas fa-image"></i> + 갤러리</button>
                 </div>
+                
+                {/* 🚨 [NEW] 임시저장 버튼 추가됨! */}
                 <div className="step-actions">
                   <button className="step-back-btn" onClick={() => setStep(1)}>이전</button>
+                  <button onClick={handleSaveDraft} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ccc', background: '#fff', color: '#666', fontWeight: 'bold', cursor: 'pointer' }}>💾 임시저장</button>
                   <button className="step-next-btn" onClick={() => setStep(3)}>다음</button>
                 </div>
               </div>
             )}
 
-            {/* 🚨 원래 코드를 전혀 건드리지 않고 복구한 3단계 화면입니다! */}
             {step === 3 && (
               <div className="record-step">
                 <h3 className="step-title">✍️ 여행 이야기를 써주세요</h3>
                 <div className="write-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  
                   <input type="text" className="form-input" placeholder="게시물 제목 (예: 성수동 감성 코스)" value={title} onChange={e => setTitle(e.target.value)} />
-                  
                   <select className="form-input" style={{ backgroundColor: '#f8f9fa' }}>
                     <option value="">누구와 함께한 여행인가요?</option>
                     <option value="solo">🚶 나홀로 여행</option>
@@ -391,17 +422,17 @@ const RecordTab = ({ onPublish }) => {
                     <option value="couple">💑 연인과 함께</option>
                     <option value="family">👨‍👩‍👧‍👦 가족과 함께</option>
                   </select>
-
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: '12px', top: '14px', color: '#52B788', fontWeight: 'bold' }}>#</span>
                     <input type="text" className="form-input" placeholder="태그 입력 (쉼표로 구분)" style={{ paddingLeft: '28px' }} />
                   </div>
-
                   <textarea className="form-textarea" placeholder="어떤 여행이었나요? 코스의 꿀팁이나 감상을 자유롭게 적어주세요!" rows="6" value={body} onChange={e => setBody(e.target.value)} />
                 </div>
 
+                {/* 🚨 [NEW] 임시저장 버튼 추가됨! */}
                 <div className="step-actions" style={{ marginTop: '24px' }}>
                   <button className="step-back-btn" onClick={() => setStep(2)} disabled={isPublishing}>이전</button>
+                  <button onClick={handleSaveDraft} disabled={isPublishing} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ccc', background: '#fff', color: '#666', fontWeight: 'bold', cursor: 'pointer' }}>💾 임시저장</button>
                   <button className="publish-btn" onClick={handlePublish} disabled={isPublishing}>
                     {isPublishing ? '☁️ 서버에 올리는 중...' : '게시하기'}
                   </button>

@@ -116,7 +116,7 @@ const HomeTab = ({ following, onOpenModal }) => {
                 </header>
 
                 <div className="post-route-map">
-                  <RouteMap route={post.route || []} height="160px" />
+                  <RouteMap route={post.route} detailedPath={post.detailedPath} height="160px" />
                   <div className="route-title-overlay">
                     <h4>{post.title}</h4>
                     <div className="route-stops-count">{post.route ? post.route.length : 0}개 장소</div>
