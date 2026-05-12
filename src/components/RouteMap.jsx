@@ -3,15 +3,27 @@ import { Map, Polyline, CustomOverlayMap } from 'react-kakao-maps-sdk';
 
 const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
   const [map, setMap] = useState(null);
+  
+  // 유효한 좌표가 있는 장소만 필터링
   const validRoute = route.filter(spot => spot && spot.lat && spot.lng);
 
   useEffect(() => {
-    if (map && validRoute.length > 0) {
-      const bounds = new window.kakao.maps.LatLngBounds();
-      validRoute.forEach(spot => bounds.extend(new window.kakao.maps.LatLng(spot.lat, spot.lng)));
-      // 장소명이 잘리지 않도록 여백(padding)을 충분히(48px) 줍니다.
-      map.setBounds(bounds, 48, 48, 48, 48);
+    if (!map || validRoute.length === 0) return;
+
+    // 🚨 핵심 개선: 장소가 딱 1개일 때는 억지로 Bounds를 잡지 않고 적당한 줌 레벨 지정
+    if (validRoute.length === 1) {
+      const singlePoint = new window.kakao.maps.LatLng(validRoute[0].lat, validRoute[0].lng);
+      map.setCenter(singlePoint);
+      map.setLevel(5); // 1개일 때 보기 좋은 줌 레벨
+      return;
     }
+
+    // 장소가 2개 이상일 때는 기존처럼 모든 마커가 보이도록 자동 줌인/아웃
+    const bounds = new window.kakao.maps.LatLngBounds();
+    validRoute.forEach(spot => bounds.extend(new window.kakao.maps.LatLng(spot.lat, spot.lng)));
+    
+    // 장소명이 잘리지 않도록 여백(padding) 적용
+    map.setBounds(bounds, 48, 48, 48, 48);
   }, [map, validRoute]);
 
   if (validRoute.length === 0) {
@@ -27,7 +39,7 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
       onCreate={setMap}
       draggable={false} zoomable={false} disableDoubleClickZoom={true}
     >
-      {/* 🖤 경로 선: 가독성을 위해 살짝 투명도를 주어 지도의 도로와 차별화 */}
+      {/* 🖤 경로 선: 투명도를 주어 지도의 도로와 차별화 */}
       {path.length > 1 && (
         <Polyline
           path={[path]}
@@ -42,14 +54,15 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
         <CustomOverlayMap 
           key={i} 
           position={{ lat: spot.lat, lng: spot.lng }}
-          yAnchor={1.1} // 마커 위치를 좌표보다 약간 위로 띄워 시인성 확보
+          yAnchor={1.1} // 마커 위치를 위로 살짝 띄움
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-            {/* 1. 장소명 커스텀 태그 */}
+            
+            {/* 장소명 커스텀 태그 */}
             {spot.name && (
               <div style={{
                 background: 'rgba(255, 255, 255, 0.85)',
-                backdropFilter: 'blur(8px)', // 배경 블러 효과로 글자 가독성 극대화
+                backdropFilter: 'blur(8px)', 
                 padding: '4px 10px',
                 borderRadius: '20px',
                 fontSize: '11px',
@@ -63,7 +76,7 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
               </div>
             )}
             
-            {/* 2. 포인트 마커 */}
+            {/* 포인트 마커 */}
             <div style={{
               background: '#2C2A29', 
               color: '#fff', 
@@ -76,6 +89,7 @@ const RouteMap = ({ route = [], width = '100%', height = '260px' }) => {
             }}>
               {i + 1}
             </div>
+            
           </div>
         </CustomOverlayMap>
       ))}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-// 🚨 파이어베이스에서 내 글만 세어오기 위한 도구들 추가
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase'; 
 import PostDetailModal from './components/PostDetailModal'; 
@@ -15,7 +14,6 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   
-  // 🟢 내가 쓴 글의 개수를 실시간으로 기억할 상태
   const [myPostCount, setMyPostCount] = useState(0);
 
   const [activeTab, setActiveTab] = useState('home');
@@ -23,7 +21,6 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
 
-  // 1. 로그인 상태 감지 리스너
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -32,23 +29,30 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. 🟢 내 게시물 개수 실시간 감지 리스너 (로그인한 유저가 있을 때만 작동)
   useEffect(() => {
     if (!currentUser) {
       setMyPostCount(0);
       return;
     }
 
-    // "posts 컬렉션에서 userId가 내 구글 uid와 똑같은 것만 찾아줘!"
     const q = query(collection(db, 'posts'), where('userId', '==', currentUser.uid));
     
-    // 글을 쓰거나 지울 때마다 마이페이지 숫자가 실시간으로 바뀝니다.
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMyPostCount(snapshot.size); // 가져온 문서의 개수를 상태에 저장
+      setMyPostCount(snapshot.size); 
     });
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // 1. 사이드 패널이 열렸을 때 배경화면 스크롤 방지 로직 추가
+  useEffect(() => {
+    if (isNotifOpen || isProfileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => { document.body.style.overflow = 'auto'; };
+  }, [isNotifOpen, isProfileOpen]);
 
   const [following, setFollowing] = useState(() => {
     return JSON.parse(localStorage.getItem('gyeolkil_following') || '["u2", "u3", "u4"]'); 
@@ -137,7 +141,6 @@ function App() {
             
             <div style={{ display: 'flex', justifyContent: 'center', gap: '35px' }}>
               <div style={{ textAlign: 'center' }}>
-                {/* 🚨 실시간으로 가져온 내 게시물 개수 렌더링! */}
                 <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#212529' }}>{myPostCount}</div>
                 <div style={{ fontSize: '0.8rem', color: '#868e96' }}>게시물</div>
               </div>
@@ -157,10 +160,19 @@ function App() {
               <i className="fas fa-bookmark" style={{ color: '#52B788', width: '20px', textAlign: 'center' }}></i>
               <span style={{ fontSize: '1rem', color: '#495057' }}>저장한 여행기</span>
             </li>
-            <li style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f3f5', cursor: 'pointer' }}>
+            
+            {/* 2. 클릭 시 패널을 닫고 '발자취' 탭으로 자동 이동하도록 연결! */}
+            <li 
+              style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f3f5', cursor: 'pointer' }}
+              onClick={() => {
+                setActiveTab('footprint');
+                closeAllPanels();
+              }}
+            >
               <i className="fas fa-map-pin" style={{ color: '#52B788', width: '20px', textAlign: 'center' }}></i>
               <span style={{ fontSize: '1rem', color: '#495057' }}>내 여행 통계</span>
             </li>
+
             <li style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f1f3f5', cursor: 'pointer' }}>
               <i className="fas fa-cog" style={{ color: '#adb5bd', width: '20px', textAlign: 'center' }}></i>
               <span style={{ fontSize: '1rem', color: '#495057' }}>앱 설정</span>
@@ -177,7 +189,11 @@ function App() {
 
       <main className="tab-contents">
         {activeTab === 'home' && <HomeTab following={following} onOpenModal={(id) => setSelectedPostId(id)} />}
+        
+        {/* TODO: DiscoverTab 내부에서 파이어베이스의 posts를 직접 불러오도록 수정하거나, 
+            App.jsx에서 posts 상태를 만들어 Home과 Discover에 모두 넘겨주는 방식(State Lifting)을 권장합니다. */}
         {activeTab === 'discover' && <DiscoverTab posts={[]} />}
+        
         {activeTab === 'record' && <RecordTab onPublish={() => setActiveTab('home')} />}
         {activeTab === 'footprint' && <FootprintTab />}
         {activeTab === 'chat' && <ChatTab />}

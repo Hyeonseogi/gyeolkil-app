@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import exifr from 'exifr';
+import heic2any from 'heic2any'; // 🆕 아이폰 사진 변환기 추가!
 import RouteMap from '../components/RouteMap';
 import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-// 🚨 auth(현재 로그인한 유저 정보)를 가져오기 위해 추가했습니다!
 import { db, storage, auth } from '../firebase'; 
 
 const RecordTab = ({ onPublish }) => {
@@ -19,8 +19,8 @@ const RecordTab = ({ onPublish }) => {
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
-  const dragItem = useRef();
-  const dragOverItem = useRef();
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
 
   useEffect(() => {
     const savedDrafts = JSON.parse(localStorage.getItem('gyeolkil_drafts') || '[]');
@@ -30,6 +30,9 @@ const RecordTab = ({ onPublish }) => {
   const handleCameraUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // 사용자에게 로딩 상태 인지시키기
+    alert("현재 위치를 찾고 있습니다. 잠시만 기다려주세요! 📡");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -46,12 +49,13 @@ const RecordTab = ({ onPublish }) => {
       },
       (err) => {
         console.error("GPS 오류:", err);
-        alert("위치 권한이 없어 기본 위치로 설정됩니다.");
+        alert("위치 정보를 가져오지 못했습니다. 기본 위치(서울)로 설정됩니다.");
         const photoUrl = URL.createObjectURL(file);
         setSpots([...spots, { name: `장소 ${spots.length + 1}`, lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788' }]);
         setStep(2);
       },
-      { enableHighAccuracy: true }
+      // 🚨 무한 대기 방지: 5초 안에 못 찾으면 강제 에러 발생
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   };
 
@@ -59,27 +63,62 @@ const RecordTab = ({ onPublish }) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    // 아이폰 HEIC 변환을 위한 로딩 상태 추가 (선택사항, UX를 위해)
+    setIsPublishing(true); 
+
     const newSpots = [];
+    let missingGpsCount = 0;
+
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      let file = files[i];
+      
       try {
+        // 🚨 핵심 로직: 아이폰 사진(HEIC)인지 검사하고 맞으면 JPEG로 변환!
+        if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+          console.log("아이폰 HEIC 사진 감지! JPEG로 변환합니다...");
+          const convertedBlob = await heic2any({ 
+            blob: file, 
+            toType: 'image/jpeg',
+            quality: 0.8 // 용량 최적화
+          });
+          
+          // 변환된 Blob을 다시 File 객체로 포장
+          const blobArray = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+          file = new File([blobArray], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+        }
+
         const gps = await exifr.gps(file);
         const photoUrl = URL.createObjectURL(file);
+
+        if (!gps) missingGpsCount++;
 
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
           lat: gps ? gps.latitude : 37.5665, 
           lng: gps ? gps.longitude : 126.9780,
           photo: photoUrl,
-          file: file, 
+          file: file, // 변환된 파일(JPG)이 저장되므로 파이어베이스에도 안전하게 올라감
           color: '#52B788'
         });
       } catch (err) {
-        console.error('EXIF 실패:', err);
+        console.error('이미지 처리 실패:', err);
+        missingGpsCount++;
+        // 실패해도 빈 이미지가 아닌 에러를 방어하며 진행
+        const photoUrl = URL.createObjectURL(file);
+        newSpots.push({
+          name: `장소 ${spots.length + i + 1}`,
+          lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788'
+        });
       }
     }
+
+    if (missingGpsCount > 0) {
+      alert(`${missingGpsCount}장의 사진에 위치 정보가 없어 기본 위치로 설정되었습니다.\n(SNS 등에서 다운로드한 사진이나, 아이폰 권한 설정에 따라 위치가 지워질 수 있습니다)`);
+    }
+
     setSpots([...spots, ...newSpots]);
     setStep(2);
+    setIsPublishing(false); // 로딩 해제
   };
 
   const handleLoadDraft = (draft) => {
@@ -99,6 +138,9 @@ const RecordTab = ({ onPublish }) => {
   };
 
   const handleDrop = (e) => {
+    // 🚨 드래그 앤 드롭 안전장치: 영역 밖으로 드롭했을 때 에러 방지
+    if (dragItem.current === null || dragOverItem.current === null) return;
+
     const copySpots = [...spots];
     const dragItemContent = copySpots[dragItem.current];
     
@@ -110,11 +152,17 @@ const RecordTab = ({ onPublish }) => {
     setSpots(copySpots);
   };
 
+  // 🚨 추가: 특정 장소(사진)를 목록에서 삭제하는 함수
+  const handleRemoveSpot = (indexToRemove) => {
+    // 내가 누른 인덱스와 다른 것들만 남겨서 배열을 새로 고침
+    const updatedSpots = spots.filter((_, idx) => idx !== indexToRemove);
+    setSpots(updatedSpots);
+  };
+
   const handlePublish = async () => {
     if (!title) return alert("제목을 입력해주세요");
     if (spots.length === 0) return alert("사진을 최소 1장 이상 추가해주세요");
 
-    // 🚨 파이어베이스 유저 확인 로직 추가!
     const user = auth.currentUser;
     if (!user) return alert("로그인 정보가 없습니다. 다시 로그인해주세요.");
 
@@ -124,6 +172,7 @@ const RecordTab = ({ onPublish }) => {
       const savedDrafts = JSON.parse(localStorage.getItem('gyeolkil_drafts') || '[]');
       localStorage.setItem('gyeolkil_drafts', JSON.stringify([...savedDrafts, newDraft]));
       
+      // 참고: 브라우저 새로고침 시 로컬스토리지에 저장된 Blob URL(미리보기 이미지)은 깨집니다. 텍스트와 좌표만 유지됩니다.
       alert("인터넷이 끊겨있어 기기에 안전하게 임시 저장되었습니다! 📡 (인터넷 연결 시 업로드 가능)");
       setStep(1);
       setTitle(''); setBody(''); setSpots([]);
@@ -136,6 +185,7 @@ const RecordTab = ({ onPublish }) => {
       const uploadedSpots = await Promise.all(
         spots.map(async (spot, index) => {
           if (spot.file) {
+            // 파일명에 확장자나 타입을 명시해주면 관리하기 더 편합니다.
             const fileRef = ref(storage, `posts/${Date.now()}_${index}`);
             await uploadBytes(fileRef, spot.file);
             const downloadUrl = await getDownloadURL(fileRef);
@@ -148,19 +198,18 @@ const RecordTab = ({ onPublish }) => {
       const spotsForDB = uploadedSpots.map(({ file, ...rest }) => rest);
 
       await addDoc(collection(db, "posts"), {
-        // 🚨 핵심 수정: 가짜 u1 대신 진짜 구글 로그인 정보 저장!
         userId: user.uid, 
         authorName: user.displayName || '여행자',
         authorAvatar: user.photoURL || '',
         title,
         body,
-        region: 'seoul',
+        region: 'seoul', // 추후 역지오코딩(Reverse Geocoding)으로 자동화 가능
         createdAt: Date.now(),
         likes: 0,
         comments: 0,
         saves: 0,
         route: spotsForDB,
-        likedBy: [] // 방금 만든 좋아요 기능을 위해 추가
+        likedBy: [] 
       });
 
       alert("게시물이 성공적으로 업로드되었습니다! 🎉");
@@ -170,7 +219,6 @@ const RecordTab = ({ onPublish }) => {
       setBody('');
       setSpots([]);
       
-      // 🚨 업로드 성공 후 홈 탭으로 이동하도록 함수 호출 추가!
       if (onPublish) onPublish();
 
     } catch (error) {
@@ -253,21 +301,39 @@ const RecordTab = ({ onPublish }) => {
                        <div className="spot-num">{i + 1}</div>
                        <img src={spot.photo} alt={spot.name} className="spot-thumb" />
                        <div className="spot-info" style={{ flex: 1 }}>
+                         {/* 💡 수정: 장소 이름 입력창 강조 및 placeholder 추가 */}
                          <input 
                            className="spot-location" 
                            value={spot.name}
+                           placeholder="이곳의 이름을 적어주세요 (클릭)"
                            onChange={(e) => {
                              const updated = [...spots];
                              updated[i].name = e.target.value;
                              setSpots(updated);
                            }}
-                           style={{border: 'none', background: 'transparent', width: '100%', outline: 'none', fontSize: '14px', fontWeight: 'bold'}}
+                           style={{
+                             border: 'none', background: 'transparent', width: '100%', 
+                             outline: 'none', fontSize: '15px', fontWeight: '800', 
+                             color: 'var(--primary)', borderBottom: '1px dashed #ccc' // 수정 가능한 칸임을 암시
+                           }}
                          />
                          <div className="spot-coords">📍 {spot.lat?.toFixed(4)}, {spot.lng?.toFixed(4)}</div>
                        </div>
-                       <div style={{ padding: '10px', color: '#adb5bd', cursor: 'grab' }}>
-                         <i className="fas fa-bars"></i>
+                       
+                       {/* 🚨 수정: 기존 우측 영역에 삭제 버튼과 드래그 핸들을 나란히 배치 */}
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
+                         <button 
+                           onClick={() => handleRemoveSpot(i)} 
+                           style={{ color: '#e63946', cursor: 'pointer', padding: '5px', fontSize: '16px' }}
+                           title="삭제하기"
+                         >
+                           <i className="fas fa-trash-alt"></i>
+                         </button>
+                         <div style={{ color: '#adb5bd', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
+                           <i className="fas fa-bars"></i>
+                         </div>
                        </div>
+
                      </div>
                    ))}
                 </div>
