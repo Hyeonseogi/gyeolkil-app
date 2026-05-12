@@ -1,10 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import exifr from 'exifr';
-import heic2any from 'heic2any'; // 🆕 아이폰 사진 변환기 추가!
+import heic2any from 'heic2any';
 import RouteMap from '../components/RouteMap';
 import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase'; 
+
+// 두 위도/경도 사이의 거리를 km 단위로 계산하는 하버사인 공식
+const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
+};
 
 const RecordTab = ({ onPublish }) => {
   const [step, setStep] = useState(1);
@@ -18,7 +30,6 @@ const RecordTab = ({ onPublish }) => {
 
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
-
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
 
@@ -31,7 +42,6 @@ const RecordTab = ({ onPublish }) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 사용자에게 로딩 상태 인지시키기
     alert("현재 위치를 찾고 있습니다. 잠시만 기다려주세요! 📡");
 
     navigator.geolocation.getCurrentPosition(
@@ -43,18 +53,18 @@ const RecordTab = ({ onPublish }) => {
           lng: position.coords.longitude,
           photo: photoUrl,
           file: file,
-          color: '#52B788'
+          color: '#52B788',
+          timestamp: Date.now() 
         }]);
         setStep(2);
       },
       (err) => {
         console.error("GPS 오류:", err);
-        alert("위치 정보를 가져오지 못했습니다. 기본 위치(서울)로 설정됩니다.");
+        alert("위치 정보를 가져오지 못했습니다. 기본 위치로 설정됩니다.");
         const photoUrl = URL.createObjectURL(file);
-        setSpots([...spots, { name: `장소 ${spots.length + 1}`, lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788' }]);
+        setSpots([...spots, { name: `장소 ${spots.length + 1}`, lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788', timestamp: Date.now() }]);
         setStep(2);
       },
-      // 🚨 무한 대기 방지: 5초 안에 못 찾으면 강제 에러 발생
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   };
@@ -63,9 +73,7 @@ const RecordTab = ({ onPublish }) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    // 아이폰 HEIC 변환을 위한 로딩 상태 추가 (선택사항, UX를 위해)
     setIsPublishing(true); 
-
     const newSpots = [];
     let missingGpsCount = 0;
 
@@ -73,52 +81,56 @@ const RecordTab = ({ onPublish }) => {
       let file = files[i];
       
       try {
-        // 🚨 핵심 로직: 아이폰 사진(HEIC)인지 검사하고 맞으면 JPEG로 변환!
         if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
-          console.log("아이폰 HEIC 사진 감지! JPEG로 변환합니다...");
-          const convertedBlob = await heic2any({ 
-            blob: file, 
-            toType: 'image/jpeg',
-            quality: 0.8 // 용량 최적화
-          });
-          
-          // 변환된 Blob을 다시 File 객체로 포장
+          const convertedBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
           const blobArray = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
           file = new File([blobArray], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
         }
 
-        const gps = await exifr.gps(file);
+        const exifData = await exifr.parse(file);
+        const lat = exifData?.latitude;
+        const lng = exifData?.longitude;
+        const timestamp = exifData?.DateTimeOriginal ? new Date(exifData.DateTimeOriginal).getTime() : file.lastModified;
         const photoUrl = URL.createObjectURL(file);
 
-        if (!gps) missingGpsCount++;
+        if (!lat || !lng) missingGpsCount++;
 
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
-          lat: gps ? gps.latitude : 37.5665, 
-          lng: gps ? gps.longitude : 126.9780,
+          lat: lat || 37.5665, 
+          lng: lng || 126.9780,
           photo: photoUrl,
-          file: file, // 변환된 파일(JPG)이 저장되므로 파이어베이스에도 안전하게 올라감
-          color: '#52B788'
+          file: file, 
+          color: '#52B788',
+          timestamp: timestamp 
         });
       } catch (err) {
         console.error('이미지 처리 실패:', err);
         missingGpsCount++;
-        // 실패해도 빈 이미지가 아닌 에러를 방어하며 진행
         const photoUrl = URL.createObjectURL(file);
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
-          lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788'
+          lat: 37.5665, lng: 126.9780, photo: photoUrl, file: file, color: '#52B788', timestamp: file.lastModified
         });
       }
     }
 
     if (missingGpsCount > 0) {
-      alert(`${missingGpsCount}장의 사진에 위치 정보가 없어 기본 위치로 설정되었습니다.\n(SNS 등에서 다운로드한 사진이나, 아이폰 권한 설정에 따라 위치가 지워질 수 있습니다)`);
+      alert(`${missingGpsCount}장의 사진에 위치 정보가 없어 기본 위치로 설정되었습니다.`);
     }
 
-    setSpots([...spots, ...newSpots]);
+    // 시간순 정렬 및 이름 재부여
+    const allSpots = [...spots, ...newSpots].sort((a, b) => a.timestamp - b.timestamp);
+    const renamedSpots = allSpots.map((s, idx) => ({ ...s, name: s.name.startsWith('장소') ? `장소 ${idx + 1}` : s.name }));
+
+    setSpots(renamedSpots);
     setStep(2);
-    setIsPublishing(false); // 로딩 해제
+    setIsPublishing(false); 
+  };
+
+  const handleRemoveSpot = (indexToRemove) => {
+    const updatedSpots = spots.filter((_, idx) => idx !== indexToRemove);
+    setSpots(updatedSpots);
   };
 
   const handleLoadDraft = (draft) => {
@@ -129,18 +141,10 @@ const RecordTab = ({ onPublish }) => {
     setStep(2);
   };
 
-  const handleDragStart = (e, position) => {
-    dragItem.current = position;
-  };
-
-  const handleDragEnter = (e, position) => {
-    dragOverItem.current = position;
-  };
-
+  const handleDragStart = (e, position) => { dragItem.current = position; };
+  const handleDragEnter = (e, position) => { dragOverItem.current = position; };
   const handleDrop = (e) => {
-    // 🚨 드래그 앤 드롭 안전장치: 영역 밖으로 드롭했을 때 에러 방지
     if (dragItem.current === null || dragOverItem.current === null) return;
-
     const copySpots = [...spots];
     const dragItemContent = copySpots[dragItem.current];
     
@@ -150,13 +154,6 @@ const RecordTab = ({ onPublish }) => {
     dragItem.current = null;
     dragOverItem.current = null;
     setSpots(copySpots);
-  };
-
-  // 🚨 추가: 특정 장소(사진)를 목록에서 삭제하는 함수
-  const handleRemoveSpot = (indexToRemove) => {
-    // 내가 누른 인덱스와 다른 것들만 남겨서 배열을 새로 고침
-    const updatedSpots = spots.filter((_, idx) => idx !== indexToRemove);
-    setSpots(updatedSpots);
   };
 
   const handlePublish = async () => {
@@ -172,7 +169,6 @@ const RecordTab = ({ onPublish }) => {
       const savedDrafts = JSON.parse(localStorage.getItem('gyeolkil_drafts') || '[]');
       localStorage.setItem('gyeolkil_drafts', JSON.stringify([...savedDrafts, newDraft]));
       
-      // 참고: 브라우저 새로고침 시 로컬스토리지에 저장된 Blob URL(미리보기 이미지)은 깨집니다. 텍스트와 좌표만 유지됩니다.
       alert("인터넷이 끊겨있어 기기에 안전하게 임시 저장되었습니다! 📡 (인터넷 연결 시 업로드 가능)");
       setStep(1);
       setTitle(''); setBody(''); setSpots([]);
@@ -185,7 +181,6 @@ const RecordTab = ({ onPublish }) => {
       const uploadedSpots = await Promise.all(
         spots.map(async (spot, index) => {
           if (spot.file) {
-            // 파일명에 확장자나 타입을 명시해주면 관리하기 더 편합니다.
             const fileRef = ref(storage, `posts/${Date.now()}_${index}`);
             await uploadBytes(fileRef, spot.file);
             const downloadUrl = await getDownloadURL(fileRef);
@@ -203,7 +198,7 @@ const RecordTab = ({ onPublish }) => {
         authorAvatar: user.photoURL || '',
         title,
         body,
-        region: 'seoul', // 추후 역지오코딩(Reverse Geocoding)으로 자동화 가능
+        region: 'seoul', 
         createdAt: Date.now(),
         likes: 0,
         comments: 0,
@@ -281,76 +276,99 @@ const RecordTab = ({ onPublish }) => {
 
             {step === 2 && (
               <div className="record-step">
-                <h3 className="step-title">📍 장소 순서를 확인하세요</h3>
+                <h3 className="step-title">📍 장소 순서와 체류시간 확인</h3>
                 <div style={{ marginBottom: '16px' }}>
                   <RouteMap route={spots} height="180px" />
                 </div>
                 
                 <div className="photo-spots">
-                   {spots.map((spot, i) => (
-                     <div 
-                       key={spot.name + i} 
-                       className="spot-item"
-                       draggable
-                       onDragStart={(e) => handleDragStart(e, i)}
-                       onDragEnter={(e) => handleDragEnter(e, i)}
-                       onDragEnd={handleDrop}
-                       onDragOver={(e) => e.preventDefault()}
-                       style={{ cursor: 'grab', display: 'flex', alignItems: 'center', backgroundColor: '#fff', transition: 'transform 0.1s' }}
-                     >
-                       <div className="spot-num">{i + 1}</div>
-                       <img src={spot.photo} alt={spot.name} className="spot-thumb" />
-                       <div className="spot-info" style={{ flex: 1 }}>
-                         {/* 💡 수정: 장소 이름 입력창 강조 및 placeholder 추가 */}
-                         <input 
-                           className="spot-location" 
-                           value={spot.name}
-                           placeholder="이곳의 이름을 적어주세요 (클릭)"
-                           onChange={(e) => {
-                             const updated = [...spots];
-                             updated[i].name = e.target.value;
-                             setSpots(updated);
-                           }}
-                           style={{
-                             border: 'none', background: 'transparent', width: '100%', 
-                             outline: 'none', fontSize: '15px', fontWeight: '800', 
-                             color: 'var(--primary)', borderBottom: '1px dashed #ccc' // 수정 가능한 칸임을 암시
-                           }}
-                         />
-                         <div className="spot-coords">📍 {spot.lat?.toFixed(4)}, {spot.lng?.toFixed(4)}</div>
-                       </div>
+                   {spots.map((spot, i) => {
+                     let routeConnectionUI = null;
+                     
+                     if (i < spots.length - 1) {
+                       const nextSpot = spots[i + 1];
+                       const distKm = getDistanceFromLatLonInKm(spot.lat, spot.lng, nextSpot.lat, nextSpot.lng);
+                       const timeDiffMins = Math.round(Math.abs(nextSpot.timestamp - spot.timestamp) / 60000); 
                        
-                       {/* 🚨 수정: 기존 우측 영역에 삭제 버튼과 드래그 핸들을 나란히 배치 */}
-                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
-                         <button 
-                           onClick={() => handleRemoveSpot(i)} 
-                           style={{ color: '#e63946', cursor: 'pointer', padding: '5px', fontSize: '16px' }}
-                           title="삭제하기"
-                         >
-                           <i className="fas fa-trash-alt"></i>
-                         </button>
-                         <div style={{ color: '#adb5bd', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
-                           <i className="fas fa-bars"></i>
-                         </div>
-                       </div>
+                       const speedKmH = distKm / (timeDiffMins / 60 || 1);
+                       const isCar = speedKmH > 10 || distKm > 3;
+                       const estTravelTime = isCar ? Math.ceil((distKm / 40) * 60) : Math.ceil((distKm / 4) * 60);
+                       const stayTime = Math.max(0, timeDiffMins - estTravelTime);
 
-                     </div>
-                   ))}
+                       routeConnectionUI = (
+                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0 8px' }}>
+                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
+                           
+                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: '#f8f9fa', padding: '8px 12px', borderRadius: '20px', border: '1px solid #eee', fontSize: '12px' }}>
+                             <select 
+                               style={{ border: 'none', background: 'transparent', fontWeight: 'bold', color: '#52B788', outline: 'none', cursor: 'pointer' }}
+                               defaultValue={isCar ? 'car' : 'walk'}
+                             >
+                               <option value="walk">🚶 도보 (약 {estTravelTime}분)</option>
+                               <option value="car">🚗 차/대중교통 (약 {estTravelTime}분)</option>
+                             </select>
+                             
+                             <span style={{ color: '#ccc' }}>|</span>
+                             
+                             <span style={{ color: 'var(--text-sub)' }}>
+                               ☕ 이 장소에서 <strong>약 {stayTime}분</strong> 머무름
+                             </span>
+                           </div>
+                           
+                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
+                         </div>
+                       );
+                     }
+
+                     return (
+                       <React.Fragment key={spot.name + i}>
+                         <div 
+                           className="spot-item"
+                           draggable
+                           onDragStart={(e) => handleDragStart(e, i)}
+                           onDragEnter={(e) => handleDragEnter(e, i)}
+                           onDragEnd={handleDrop}
+                           onDragOver={(e) => e.preventDefault()}
+                           style={{ cursor: 'grab', display: 'flex', alignItems: 'center', backgroundColor: '#fff', transition: 'transform 0.1s' }}
+                         >
+                           <div className="spot-num">{i + 1}</div>
+                           <img src={spot.photo} alt={spot.name} className="spot-thumb" />
+                           <div className="spot-info" style={{ flex: 1 }}>
+                             <input 
+                               className="spot-location" 
+                               value={spot.name}
+                               placeholder="이곳의 이름을 적어주세요 (클릭)"
+                               onChange={(e) => {
+                                 const updated = [...spots];
+                                 updated[i].name = e.target.value;
+                                 setSpots(updated);
+                               }}
+                               style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', fontSize: '15px', fontWeight: '800', color: 'var(--primary)', borderBottom: '1px dashed #ccc' }}
+                             />
+                             <div className="spot-coords">
+                               📍 {spot.lat?.toFixed(4)}, {spot.lng?.toFixed(4)} 
+                               <span style={{marginLeft: '6px', color:'#adb5bd'}}>{new Date(spot.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                             </div>
+                           </div>
+                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
+                             <button onClick={() => handleRemoveSpot(i)} style={{ color: '#e63946', cursor: 'pointer', padding: '5px', fontSize: '16px' }} title="삭제하기">
+                               <i className="fas fa-trash-alt"></i>
+                             </button>
+                             <div style={{ color: '#adb5bd', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
+                               <i className="fas fa-bars"></i>
+                             </div>
+                           </div>
+                         </div>
+                         {routeConnectionUI}
+                       </React.Fragment>
+                     );
+                   })}
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '16px', marginBottom: '24px' }}>
-                  <button 
-                    onClick={() => cameraInputRef.current.click()}
-                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}>
-                    <i className="fas fa-camera"></i> + 카메라
-                  </button>
-                  <button 
-                    onClick={() => galleryInputRef.current.click()}
-                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}>
-                    <i className="fas fa-image"></i> + 갤러리
-                  </button>
+                  <button onClick={() => cameraInputRef.current.click()} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}><i className="fas fa-camera"></i> + 카메라</button>
+                  <button onClick={() => galleryInputRef.current.click()} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}><i className="fas fa-image"></i> + 갤러리</button>
                 </div>
-
                 <div className="step-actions">
                   <button className="step-back-btn" onClick={() => setStep(1)}>이전</button>
                   <button className="step-next-btn" onClick={() => setStep(3)}>다음</button>
@@ -358,6 +376,7 @@ const RecordTab = ({ onPublish }) => {
               </div>
             )}
 
+            {/* 🚨 원래 코드를 전혀 건드리지 않고 복구한 3단계 화면입니다! */}
             {step === 3 && (
               <div className="record-step">
                 <h3 className="step-title">✍️ 여행 이야기를 써주세요</h3>
