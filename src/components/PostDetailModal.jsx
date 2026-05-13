@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// 🚨 getDoc 대신 onSnapshot 추가!
 import { doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 import RouteMap from './RouteMap';
@@ -8,6 +7,17 @@ import { formatTime, USERS } from '../data';
 const PostDetailModal = ({ postId, onClose }) => {
   const [post, setPost] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // 🚨 추가: 다음 팀원이 바로 쓸 수 있도록 댓글 입력 상태 미리 세팅
+  const [commentText, setCommentText] = useState('');
+
+  // 1. 뒤로가기 스크롤 방지 로직 추가
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'; // 열릴 때 스크롤 막기
+    return () => {
+      document.body.style.overflow = 'auto'; // 닫힐 때 스크롤 복구
+    };
+  }, []);
 
   useEffect(() => {
     if (!postId) return;
@@ -15,7 +25,6 @@ const PostDetailModal = ({ postId, onClose }) => {
     
     const docRef = doc(db, 'posts', postId);
 
-    // 🚨 해당 게시물의 변화를 실시간 감시하는 리스너!
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         setPost({ id: docSnap.id, ...docSnap.data() });
@@ -33,13 +42,17 @@ const PostDetailModal = ({ postId, onClose }) => {
 
   const handleToggleLike = async () => {
     const user = auth.currentUser;
-    if (!user || !post) return;
+    // 2. 비로그인 유저 예외 처리 알림
+    if (!user) {
+      alert("좋아요를 누르려면 로그인이 필요합니다! 🔒");
+      return;
+    }
+    if (!post) return;
 
     const postRef = doc(db, 'posts', post.id);
     const currentLikedBy = post.likedBy || [];
     const isLiked = currentLikedBy.includes(user.uid);
 
-    // 수동 상태 변경 코드 삭제. DB에 쏘기만 하면 알아서 화면 렌더링 됩니다.
     try {
       await updateDoc(postRef, {
         likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
@@ -50,8 +63,9 @@ const PostDetailModal = ({ postId, onClose }) => {
     }
   };
 
+  // 3. 더 안전한 오버레이 클릭 감지
   const handleOverlayClick = (e) => {
-    if (e.target.className === 'modal-overlay') {
+    if (e.target === e.currentTarget) {
       onClose();
     }
   };
@@ -62,13 +76,12 @@ const PostDetailModal = ({ postId, onClose }) => {
   const userAvatar = post?.authorAvatar || USERS?.find(u => u.id === post?.userId)?.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback';
   
   const isLiked = post?.likedBy?.includes(auth.currentUser?.uid);
-  
-  // 🚨 UI에서 마이너스 완전 차단!
   const likeCount = Math.max(0, post?.likes || 0); 
 
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal-sheet">
+    <div className="modal-overlay" onClick={handleOverlayClick} style={{ cursor: 'pointer' }}>
+      {/* cursor: default를 주어 모달 안쪽 클릭 시 포인터가 남는 것을 방지 */}
+      <div className="modal-sheet" style={{ cursor: 'default' }}>
         <div className="modal-drag-handle"></div>
         <button className="modal-close-btn" onClick={onClose}>
           <i className="fas fa-times"></i>
@@ -92,7 +105,7 @@ const PostDetailModal = ({ postId, onClose }) => {
             <div className="modal-route-section">
               <h3>여행 경로</h3>
               <div className="modal-route-canvas-wrap">
-                <RouteMap route={post.route || []} height="200px" />
+                <RouteMap route={post.route} detailedPath={post.detailedPath} height="160px" />
               </div>
               <div className="modal-route-stops">
                 {post.route?.map((spot, idx) => (
@@ -150,7 +163,14 @@ const PostDetailModal = ({ postId, onClose }) => {
             <div className="modal-comments">
               <div className="add-comment-row">
                 <img className="comment-avatar" src={auth.currentUser?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=my"} alt="내 프로필" />
-                <input type="text" placeholder="멋진 코스네요! 댓글을 남겨보세요..." />
+                {/* 4. 상태 연결 완료! 팀원이 onClick 이벤트만 달면 됩니다. */}
+                <input 
+                  type="text" 
+                  placeholder="멋진 코스네요! 댓글을 남겨보세요..." 
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && alert("댓글 작성 기능은 곧 업데이트됩니다!")}
+                />
                 <button className="comment-send-btn"><i className="fas fa-paper-plane"></i></button>
               </div>
             </div>

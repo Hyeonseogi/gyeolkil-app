@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import RouteMap from '../components/RouteMap';
 import { formatTime, USERS } from '../data';
-// 🚨 getDocs 대신 onSnapshot을 불러옵니다!
 import { collection, query, orderBy, doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
@@ -14,7 +13,6 @@ const HomeTab = ({ following, onOpenModal }) => {
     setIsLoading(true);
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     
-    // 🚨 핵심 포인트: DB에 변화가 생기면 알아서 다시 실행되는 마법의 리스너
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const fetchedPosts = [];
       querySnapshot.forEach((doc) => {
@@ -27,19 +25,22 @@ const HomeTab = ({ following, onOpenModal }) => {
       setIsLoading(false);
     });
 
-    // 컴포넌트가 꺼질 때 리스너를 해제해 줘야 메모리가 새지 않습니다.
     return () => unsubscribe(); 
   }, []);
 
   const handleToggleLike = async (e, postId, currentLikedBy = []) => {
     e.stopPropagation(); 
     const user = auth.currentUser;
-    if (!user) return;
+    
+    // 🚨 개선: 비로그인 유저에게 명확한 피드백 제공
+    if (!user) {
+      alert("좋아요를 누르려면 먼저 로그인해주세요! 🔒");
+      return;
+    }
 
     const postRef = doc(db, 'posts', postId);
     const isLiked = currentLikedBy.includes(user.uid); 
 
-    // 화면 계산 코드는 다 지웠습니다! DB에 쏘기만 하면 onSnapshot이 화면을 즉시 고쳐줍니다.
     try {
       await updateDoc(postRef, {
         likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
@@ -50,19 +51,30 @@ const HomeTab = ({ following, onOpenModal }) => {
     }
   };
 
-  let displayPosts = posts;
-  if (filter === 'following') {
-    displayPosts = posts.filter(p => following && following.includes(p.userId));
-  } else if (filter === 'popular') {
-    displayPosts = [...posts].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-  } else if (filter === 'nearby') {
-    displayPosts = posts.slice(0, 2); 
-  }
+  // 🚨 개선: 피드 데이터가 많아질 것을 대비한 연산 최적화
+  const displayPosts = useMemo(() => {
+    if (filter === 'following') {
+      return posts.filter(p => following && following.includes(p.userId));
+    } 
+    
+    if (filter === 'popular') {
+      // 불변성을 지키기 위해 스프레드 연산자로 복사 후 정렬
+      return [...posts].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    } 
+    
+    if (filter === 'nearby') {
+      // TODO: 추후 navigator.geolocation으로 현재 내 위치(위도/경도)를 가져온 후,
+      // post.route[0] 의 좌표와 거리를 계산(Haversine formula 등)하여 가까운 순으로 정렬하는 로직 추가 예정!
+      return posts.slice(0, 2); 
+    }
+    
+    return posts; // 'all' 일 때
+  }, [posts, filter, following]);
 
   return (
     <section className="tab-page active" style={{ overflowY: 'auto' }}>
       <div className="discover-header">
-        <h2 className="section-title" style={{ fontSize: '1.2rem', marginBottom: '0' }}>최신 여행기</h2>
+        <h2 className="section-title" style={{ fontSize: '1.2rem', marginBottom: '0' }}>최신 여정</h2>
       </div>
 
       <div className="feed-filter">
@@ -90,8 +102,6 @@ const HomeTab = ({ following, onOpenModal }) => {
             const userAvatar = post.authorAvatar || USERS.find(u => u.id === post.userId)?.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback';
             
             const isLiked = post.likedBy?.includes(auth.currentUser?.uid);
-            
-            // 🚨 무슨 일이 있어도 화면에 마이너스가 뜨는 것을 방어!
             const likeCount = Math.max(0, post.likes || 0); 
             
             return (
@@ -106,7 +116,7 @@ const HomeTab = ({ following, onOpenModal }) => {
                 </header>
 
                 <div className="post-route-map">
-                  <RouteMap route={post.route || []} height="160px" />
+                  <RouteMap route={post.route} detailedPath={post.detailedPath} height="160px" />
                   <div className="route-title-overlay">
                     <h4>{post.title}</h4>
                     <div className="route-stops-count">{post.route ? post.route.length : 0}개 장소</div>
