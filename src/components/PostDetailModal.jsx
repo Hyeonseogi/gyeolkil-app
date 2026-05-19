@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   doc, onSnapshot, collection, query, orderBy, 
   addDoc, serverTimestamp, updateDoc, arrayUnion, 
-  arrayRemove, increment, getDoc, setDoc 
+  arrayRemove, increment, getDoc, setDoc, deleteDoc 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 import RouteMap from './RouteMap';
@@ -12,9 +12,10 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
   const [post, setPost] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // 댓글 상태 관리
+  // 댓글 및 대댓글 상태 관리
   const [comments, setComments] = useState([]);
   const [commentInput, setCommentInput] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null); // { commentId, authorName }
 
   // 인터랙티브 마커 & 장소명 수정 상태
   const [activeIndex, setActiveIndex] = useState(0);
@@ -27,26 +28,21 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     return () => { document.body.style.overflow = 'auto'; };
   }, []);
 
-  // 게시물 단건 & 댓글 목록 실시간 감시
+  // 게시물 & 댓글 데이터 실시간 감시
   useEffect(() => {
     if (!postId) return;
     setIsLoading(true);
     
-    // 1. 게시물 데이터 실시간 감시
     const postRef = doc(db, 'posts', postId);
     const unsubscribePost = onSnapshot(postRef, (docSnap) => {
       if (docSnap.exists()) {
         setPost({ id: docSnap.id, ...docSnap.data() });
       } else {
-        console.log("해당 게시물이 없습니다!");
+        setPost(null);
       }
-      setIsLoading(false);
-    }, (error) => {
-      console.error("모달 실시간 데이터 오류:", error);
       setIsLoading(false);
     });
 
-    // 2. 댓글 데이터 실시간 감시 (작성순)
     const commentsQuery = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
     const unsubscribeComments = onSnapshot(commentsQuery, (snapshot) => {
       const arr = [];
@@ -62,7 +58,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     }; 
   }, [postId]);
 
-  // 게시물 본문 좋아요
+  // 게시물 좋아요
   const handleToggleLike = async () => {
     const user = auth.currentUser;
     if (!user) { alert("좋아요를 누르려면 로그인이 필요합니다! 🔒"); return; }
@@ -80,53 +76,102 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     } catch (error) { console.error("좋아요 업데이트 실패:", error); }
   };
 
-  // 댓글 작성 DB 연동
+  // 🚨 [NEW] 게시물 삭제
+  const handleDeletePost = async () => {
+    if (!window.confirm('정말 이 여정을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
+    
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+      alert('게시물이 성공적으로 삭제되었습니다.');
+      onClose(); // 모달 닫기
+    } catch (error) {
+      console.error('게시물 삭제 실패:', error);
+    }
+  };
+
+  // 댓글 & 대댓글 작성
   const handleAddComment = async () => {
     const user = auth.currentUser;
     if (!user) { alert('로그인이 필요합니다.'); return; }
     if (!commentInput.trim()) return;
 
     try {
-      // users 문서 보장 및 commentedPosts 업데이트
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL,
-          followers: [], following: [], likedPosts: [], savedPosts: [], commentedPosts: []
+      if (replyingTo) {
+        // 대댓글(답글) 모드
+        const commentRef = doc(db, 'posts', postId, 'comments', replyingTo.commentId);
+        await updateDoc(commentRef, {
+          replies: arrayUnion({
+            id: Date.now().toString(), // 고유 ID
+            text: commentInput,
+            userId: user.uid,
+            authorName: user.displayName,
+            authorAvatar: user.photoURL,
+            createdAt: Date.now() 
+          })
         });
+        setReplyingTo(null); // 답글 모드 해제
+      } else {
+        // 일반 댓글 모드
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+          await setDoc(userRef, {
+            uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL,
+            followers: [], following: [], likedPosts: [], savedPosts: [], commentedPosts: []
+          });
+        }
+
+        await addDoc(collection(db, 'posts', postId, 'comments'), {
+          text: commentInput,
+          userId: user.uid,
+          authorName: user.displayName,
+          authorAvatar: user.photoURL,
+          createdAt: serverTimestamp(),
+          likes: 0,
+          likedBy: [],
+          replies: [] // 대댓글을 담을 배열 초기화
+        });
+
+        await updateDoc(doc(db, 'posts', postId), { comments: increment(1) });
+
+        const latestUserSnap = await getDoc(userRef);
+        const existing = latestUserSnap.data()?.commentedPosts || [];
+        if (!existing.includes(postId)) {
+          await updateDoc(userRef, { commentedPosts: arrayUnion(postId) });
+        }
       }
 
-      // 댓글 생성
-      await addDoc(collection(db, 'posts', postId, 'comments'), {
-        text: commentInput,
-        userId: user.uid,
-        authorName: user.displayName,
-        authorAvatar: user.photoURL,
-        createdAt: serverTimestamp(),
-        likes: 0,
-        likedBy: [],
-        replies: []
-      });
-
-      // 게시물 댓글 수 증가
-      await updateDoc(doc(db, 'posts', postId), { comments: increment(1) });
-
-      // 유저의 commentedPosts 배열에 추가
-      const latestUserSnap = await getDoc(userRef);
-      const existing = latestUserSnap.data()?.commentedPosts || [];
-      if (!existing.includes(postId)) {
-        await updateDoc(userRef, { commentedPosts: arrayUnion(postId) });
-      }
-
-      setCommentInput(''); // 인풋 초기화
+      setCommentInput('');
     } catch (error) {
       console.error('댓글 작성 실패:', error);
     }
   };
 
-  // 사진 슬라이드 및 마커 인덱스 추출
+  // 🚨 [NEW] 댓글 삭제
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('댓글을 삭제하시겠습니까?')) return;
+    try {
+      await deleteDoc(doc(db, 'posts', postId, 'comments', commentId));
+      await updateDoc(doc(db, 'posts', postId), { comments: increment(-1) });
+    } catch (error) {
+      console.error('댓글 삭제 실패:', error);
+    }
+  };
+
+  // 🚨 [NEW] 대댓글 삭제
+  const handleDeleteReply = async (commentId, replyObj) => {
+    if (!window.confirm('답글을 삭제하시겠습니까?')) return;
+    try {
+      await updateDoc(doc(db, 'posts', postId, 'comments', commentId), {
+        replies: arrayRemove(replyObj)
+      });
+    } catch (error) {
+      console.error('대댓글 삭제 실패:', error);
+    }
+  };
+
+  // 사진 슬라이드 및 장소명 수정
   const handlePhotoScroll = (e) => {
     const { scrollLeft, clientWidth } = e.target;
     if (clientWidth === 0) return;
@@ -182,10 +227,17 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
                   {post.createdAt ? formatTime(post.createdAt) : ''} · {post.region === 'seoul' ? '서울' : '기타 지역'}
                 </div>
               </div>
+              
+              {/* 🚨 [NEW] 본인 게시물일 경우 삭제 버튼 노출 */}
               {!isMyPost && <button className="modal-follow-btn" style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #1A1A1A', background: 'none', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>팔로우</button>}
+              {isMyPost && (
+                <button onClick={handleDeletePost} style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#ffe3e3', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <i className="fas fa-trash-alt"></i> 삭제
+                </button>
+              )}
             </div>
 
-            {/* 🗺️ 고정 경로 지도 영역 ( highlightIndex 연동 ) */}
+            {/* 고정 경로 지도 영역 */}
             <div className="modal-route-section" style={{ borderBottom: '1px solid #F1F3F5' }}>
               <div className="modal-route-canvas-wrap" style={{ width: '100%', position: 'relative' }}>
                 <RouteMap route={post.route} detailedPath={post.detailedPath} height="220px" highlightIndex={activeIndex} />
@@ -203,15 +255,13 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
               )}
             </div>
 
-            {/* 📸 사진 스택 영역 (마커 인터랙션 연동) */}
+            {/* 사진 스택 영역 */}
             {post.route?.some(spot => spot.photo) && (
               <div className="modal-photos-section" style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', backgroundColor: '#F8F9FA', overflow: 'hidden', borderTop: '1px solid #F1F3F5' }}>
                 <div className="modal-photos-scroll" onScroll={handlePhotoScroll} style={{ display: 'flex', width: '100%', height: '100%', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   {post.route.map((spot, idx) => (
                     <div key={idx} className="modal-photo-item" style={{ width: '100%', height: '100%', flexShrink: 0, scrollSnapAlign: 'start', position: 'relative' }}>
                       <img src={spot.photo || 'https://via.placeholder.com/400'} alt={spot.name} className="modal-photo-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      
-                      {/* 인라인 장소 이름 수정 오버레이 */}
                       <div className="modal-photo-tag" style={{ position: 'absolute', bottom: '16px', left: '16px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', zIndex: 2 }}>
                         {isEditingName === idx ? (
                           <input 
@@ -234,7 +284,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
               </div>
             )}
 
-            {/* ⏱️ 여정 정보 타임라인 */}
+            {/* 여정 정보 타임라인 */}
             <div className="modal-timeline-section" style={{ padding: '20px 16px', borderTop: '8px solid #F1F3F5', backgroundColor: '#fff' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#1A1A1A', marginBottom: '16px' }}>⏱️ 여정 타임라인</h3>
               {post.route?.map((spot, i) => {
@@ -278,23 +328,58 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
               <button className="modal-action-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color:'#495057', display:'flex', alignItems:'center', gap:'6px', marginLeft:'auto' }}><i className="far fa-bookmark"></i> {post.saves || 0}</button>
             </div>
             
-            {/* 💬 실시간 댓글 렌더링 영역 */}
+            {/* 💬 실시간 댓글 & 대댓글 렌더링 영역 */}
             <div className="modal-comments" style={{ padding: '0 16px 24px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>댓글 {post.comments || 0}개</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {comments.map((comment) => (
-                  <div key={comment.id} style={{ display: 'flex', gap: '12px' }}>
-                    <img src={comment.authorAvatar} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{comment.authorName}</span>
-                        {/* 🚨 [버그 해결!] 파이어베이스 시간 객체를 밀리초로 변환하는 방어 로직 추가! */}
-                        <span style={{ fontSize: '11px', color: '#ADB5BD' }}>
-                          {formatTime(comment.createdAt?.toMillis ? comment.createdAt.toMillis() : Date.now())}
-                        </span>
+                  <div key={comment.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    
+                    {/* 부모 댓글 */}
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <img src={comment.authorAvatar} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{comment.authorName}</span>
+                          <span style={{ fontSize: '11px', color: '#ADB5BD' }}>
+                            {formatTime(comment.createdAt?.toMillis ? comment.createdAt.toMillis() : Date.now())}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.4' }}>{comment.text}</div>
+                        
+                        {/* 🚨 [NEW] 답글 달기 & 댓글 삭제 액션 */}
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                          <button onClick={() => setReplyingTo({ commentId: comment.id, authorName: comment.authorName })} style={{ background: 'none', border: 'none', color: '#ADB5BD', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}>답글 달기</button>
+                          {auth.currentUser?.uid === comment.userId && (
+                            <button onClick={() => handleDeleteComment(comment.id)} style={{ background: 'none', border: 'none', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}>삭제</button>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.4' }}>{comment.text}</div>
                     </div>
+
+                    {/* 🚨 [NEW] 대댓글(Replies) 리스트 */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div style={{ marginLeft: '48px', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '2px' }}>
+                        {comment.replies.map(reply => (
+                          <div key={reply.id} style={{ display: 'flex', gap: '10px' }}>
+                            <img src={reply.authorAvatar} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{reply.authorName}</span>
+                                <span style={{ fontSize: '11px', color: '#ADB5BD' }}>{formatTime(reply.createdAt)}</span>
+                              </div>
+                              <div style={{ fontSize: '13px', color: '#1A1A1A', lineHeight: '1.4' }}>{reply.text}</div>
+                              {auth.currentUser?.uid === reply.userId && (
+                                <div style={{ marginTop: '4px' }}>
+                                  <button onClick={() => handleDeleteReply(comment.id, reply)} style={{ background: 'none', border: 'none', color: '#e63946', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}>삭제</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   </div>
                 ))}
               </div>
@@ -305,21 +390,32 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
           <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>데이터를 찾을 수 없습니다.</div>
         )}
 
-        {/* 실시간 댓글 입력 하단 고정 바 */}
+        {/* 하단 입력 폼 영역 */}
         {post && (
-          <div className="modal-comment-input-bar" style={{ padding: '12px 16px', borderTop: '1px solid #F1F3F5', backgroundColor: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src={auth.currentUser?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=my"} alt="내 프로필" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-            <input 
-              type="text" 
-              placeholder="댓글을 남겨보세요..." 
-              value={commentInput}
-              onChange={(e) => setCommentInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-              style={{ flex: 1, border: 'none', background: '#F8F9FA', borderRadius: '20px', padding: '10px 14px', outline: 'none', fontSize: '13px' }}
-            />
-            <button onClick={handleAddComment} disabled={!commentInput.trim()} style={{ background: 'none', border: 'none', color: commentInput.trim() ? '#52B788' : '#ADB5BD', cursor: commentInput.trim() ? 'pointer' : 'default', fontSize: '16px', padding: '0 8px' }}>
-              <i className="fas fa-paper-plane"></i>
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            
+            {/* 🚨 [NEW] 답글 남기는 중 표시 바 */}
+            {replyingTo && (
+              <div style={{ width: '100%', padding: '8px 16px', backgroundColor: '#F1F3F5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#495057' }}>
+                <span><strong>{replyingTo.authorName}</strong>님에게 답글 남기는 중...</span>
+                <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ADB5BD' }}><i className="fas fa-times"></i></button>
+              </div>
+            )}
+
+            <div className="modal-comment-input-bar" style={{ padding: '12px 16px', borderTop: '1px solid #F1F3F5', backgroundColor: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src={auth.currentUser?.photoURL || "https://api.dicebear.com/7.x/adventurer/svg?seed=my"} alt="내 프로필" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+              <input 
+                type="text" 
+                placeholder={replyingTo ? "답글을 입력하세요..." : "댓글을 남겨보세요..."} 
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                style={{ flex: 1, border: 'none', background: '#F8F9FA', borderRadius: '20px', padding: '10px 14px', outline: 'none', fontSize: '13px' }}
+              />
+              <button onClick={handleAddComment} disabled={!commentInput.trim()} style={{ background: 'none', border: 'none', color: commentInput.trim() ? '#52B788' : '#ADB5BD', cursor: commentInput.trim() ? 'pointer' : 'default', fontSize: '16px', padding: '0 8px' }}>
+                <i className="fas fa-paper-plane"></i>
+              </button>
+            </div>
           </div>
         )}
 

@@ -97,7 +97,12 @@ function App() {
             onOpenUser={(id) => { setSelectedUserId(id); setActiveTab('userProfile'); }} 
           />
         )}
-        {activeTab === 'discover' && <DiscoverTab />}
+        {activeTab === 'discover' && (
+          <DiscoverTab 
+            onOpenModal={(id) => setSelectedPostId(id)} 
+            onOpenUser={(id) => { setSelectedUserId(id); setActiveTab('userProfile'); }} 
+          />
+        )}
         {activeTab === 'record' && <RecordTab onPublish={() => setActiveTab('home')} />}
         {activeTab === 'chat' && <ChatTab />}
         
