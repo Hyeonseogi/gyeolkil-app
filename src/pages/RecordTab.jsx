@@ -98,9 +98,9 @@ const RecordTab = ({ onPublish }) => {
 
     const allSpots = [...spots, ...newSpots].sort((a, b) => a.timestamp - b.timestamp);
     
-    // 🚨 [NEW 3번 해결] 클러스터링: 30m 이내 좌표는 같은 장소로 인식하여 오차 병합!
+    // 🚨 [NEW] 클러스터링 반경 상향: 80m(0.08km) 이내의 좌표는 동일 장소로 묶어줍니다!
     for (let i = 1; i < allSpots.length; i++) {
-      if (getDistanceFromLatLonInKm(allSpots[i-1].lat, allSpots[i-1].lng, allSpots[i].lat, allSpots[i].lng) < 0.03) {
+      if (getDistanceFromLatLonInKm(allSpots[i-1].lat, allSpots[i-1].lng, allSpots[i].lat, allSpots[i].lng) < 0.08) {
         allSpots[i].lat = allSpots[i-1].lat;
         allSpots[i].lng = allSpots[i-1].lng;
       }
@@ -152,7 +152,7 @@ const RecordTab = ({ onPublish }) => {
 
       const spotsForDB = uploadedSpots.map(({ file, ...rest }) => rest);
 
-      // 🚨 [NEW 2 & 4번 해결] 하이브리드 길찾기 (도보 + 차량)
+      // 🚨 하이브리드 길찾기 (도보 + 차량)
       let detailedPath = [];
       const pathPromises = [];
       
@@ -191,7 +191,7 @@ const RecordTab = ({ onPublish }) => {
         const { type, data, start, end } = result;
 
         if (type === 'tmap' && data && data.features) {
-          // 🚨 [NEW 4번 해결] TMAP이 계산해준 '정확한 도보 소요 시간' DB에 저장!
+          // TMAP이 계산해준 '정확한 도보 소요 시간' DB에 저장!
           const totalTimeSeconds = data.features[0]?.properties?.totalTime || 0; 
           spotsForDB[i].travelTimeToNext = Math.ceil(totalTimeSeconds / 60); // 분 단위로 변환해서 저장
           spotsForDB[i].transitType = 'walk';
@@ -224,7 +224,7 @@ const RecordTab = ({ onPublish }) => {
         userId: user.uid, authorName: user.displayName || '여행자', authorAvatar: user.photoURL || '',
         title, body, companion, tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''), 
         region: 'seoul', createdAt: Date.now(), likes: 0, comments: 0, saves: 0,
-        route: spotsForDB, // 👈 여기에 정확한 이동시간(travelTimeToNext)이 포함되어 저장됩니다!
+        route: spotsForDB, 
         detailedPath: detailedPath, likedBy: [] 
       });
 

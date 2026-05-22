@@ -7,6 +7,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
+import { serverTimestamp } from 'firebase/firestore';
+
 // 하버사인 거리 계산 공식
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371; 
@@ -238,27 +240,40 @@ const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
   };
 
   // 🚨 [핵심 버그 수정] 마이페이지 연동을 위한 좋아요 로직 업데이트
-  const handleToggleLike = async (e, postId, currentLikedBy = []) => {
-    e.stopPropagation();
-    const user = auth.currentUser;
-    if (!user) return;
-    try {
-      const postRef = doc(db, 'posts', postId);
-      const userRef = doc(db, 'users', user.uid); // 내 유저 정보 레퍼런스
-      const isLiked = currentLikedBy.includes(user.uid);
-      
-      // 1. 게시물 하트 수 업데이트
-      await updateDoc(postRef, {
-        likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
-        likes: increment(isLiked ? -1 : 1)
+  const handleToggleLike = async (e, postId, currentLikedBy = [], postUserId) => { // 🚨 postUserId(글쓴이 UID) 파라미터 추가!
+  e.stopPropagation();
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const postRef = doc(db, 'posts', postId);
+    const userRef = doc(db, 'users', user.uid);
+    const isLiked = currentLikedBy.includes(user.uid);
+    
+    await updateDoc(postRef, {
+      likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+      likes: increment(isLiked ? -1 : 1)
+    });
+    
+    await updateDoc(userRef, {
+      likedPosts: isLiked ? arrayRemove(postId) : arrayUnion(postId)
+    });
+
+    // 🚨 [여기가 핵심!!] 좋아요를 눌렀고(취소가 아니고), 내 글이 아닐 때 알림 전송!
+    if (!isLiked && postUserId !== user.uid) {
+      await addDoc(collection(db, 'notifications'), {
+        receiverId: postUserId, // 글쓴이에게
+        senderId: user.uid, // 내가
+        senderName: user.displayName || '여행자',
+        type: 'like',
+        message: '내 여정에 좋아요를 눌렀습니다.',
+        postId: postId,
+        read: false,
+        createdAt: Date.now()
       });
-      
-      // 2. 내 유저 정보에 하트 누른 글 기록 (마이페이지 동기화용)
-      await updateDoc(userRef, {
-        likedPosts: isLiked ? arrayRemove(postId) : arrayUnion(postId)
-      });
-    } catch (error) { console.error(error); }
-  };
+    }
+
+  } catch (error) { console.error(error); }
+};
 
   // 🚨 [핵심 버그 수정] 마이페이지 연동을 위한 북마크 로직 업데이트
   const handleToggleSave = async (e, postId) => {
@@ -541,15 +556,20 @@ const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
 
                     <div style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#1A1A1A', marginBottom: '10px' }} onClick={(e) => e.stopPropagation()}>
-                        <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy)} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
+    
+                        {/* 🚨 [여기가 핵심!!] post.userId 파라미터 추가! */}
+                        <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy, post.userId)} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
                           <i className={isLiked ? "fas fa-heart" : "far fa-heart"}></i>
                         </button>
+    
                         <button onClick={(e) => { e.stopPropagation(); onOpenModal(post.id); }} style={{ background: 'none', border: 'none', padding: 0, color: '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
                           <i className="far fa-comment"></i>
                         </button>
+    
                         <button onClick={(e) => handleToggleSave(e, post.id)} style={{ background: 'none', border: 'none', padding: 0, color: '#1A1A1A', fontSize: '20px', cursor: 'pointer', marginLeft: 'auto' }}>
                           <i className={isSaved ? "fas fa-bookmark" : "far fa-bookmark"}></i>
                         </button>
+    
                       </div>
                       <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#1A1A1A', marginBottom: '6px' }}>좋아요 {post.likes || 0}개</div>
                       <div style={{ fontWeight: '800', fontSize: '15px', color: '#1A1A1A', lineHeight: '1.3' }}>{post.title}</div>
