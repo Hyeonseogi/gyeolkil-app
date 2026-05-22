@@ -76,7 +76,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     } catch (error) { console.error("좋아요 업데이트 실패:", error); }
   };
 
-  // 🚨 [NEW] 게시물 삭제
+  // 게시물 삭제
   const handleDeletePost = async () => {
     if (!window.confirm('정말 이 여정을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
     
@@ -148,7 +148,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     }
   };
 
-  // 🚨 [NEW] 댓글 삭제
+  // 댓글 삭제
   const handleDeleteComment = async (commentId) => {
     if (!window.confirm('댓글을 삭제하시겠습니까?')) return;
     try {
@@ -159,7 +159,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     }
   };
 
-  // 🚨 [NEW] 대댓글 삭제
+  // 대댓글 삭제
   const handleDeleteReply = async (commentId, replyObj) => {
     if (!window.confirm('답글을 삭제하시겠습니까?')) return;
     try {
@@ -218,23 +218,35 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
         ) : post ? (
           <div className="modal-scroll-container" style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
             
-            {/* 유저 헤더 로우 */}
-            <div className="modal-user-row" style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: '12px' }}>
-              <img className="modal-avatar" src={userAvatar} alt="프로필" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} onClick={() => onOpenUser && onOpenUser(post.userId)} />
-              <div className="modal-user-info" style={{ flex: 1 }}>
-                <div className="modal-username" style={{ fontWeight: 'bold', fontSize: '14px', color: '#1A1A1A' }}>{userName}</div>
-                <div className="modal-user-meta" style={{ fontSize: '11px', color: '#ADB5BD', marginTop: '2px' }}>
-                  {post.createdAt ? formatTime(post.createdAt) : ''} · {post.region === 'seoul' ? '서울' : '기타 지역'}
+            {/* 🚨 [UI 완벽 수정] 유저 헤더 로우 - 삭제/팔로우 버튼 공간 완벽 분리 */}
+            <div className="modal-user-row" style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: '12px', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, overflow: 'hidden' }}>
+                <img className="modal-avatar" src={userAvatar} alt="프로필" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => onOpenUser && onOpenUser(post.userId)} />
+                <div className="modal-user-info" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div className="modal-username" style={{ fontWeight: 'bold', fontSize: '14px', color: '#1A1A1A', cursor: 'pointer' }} onClick={() => onOpenUser && onOpenUser(post.userId)}>{userName}</div>
+                  <div className="modal-user-meta" style={{ fontSize: '11px', color: '#ADB5BD', marginTop: '2px' }}>
+                    {post.createdAt ? formatTime(post.createdAt) : ''} · {post.region === 'seoul' ? '서울' : '기타 지역'}
+                  </div>
                 </div>
               </div>
               
-              {/* 🚨 [NEW] 본인 게시물일 경우 삭제 버튼 노출 */}
-              {!isMyPost && <button className="modal-follow-btn" style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #1A1A1A', background: 'none', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>팔로우</button>}
-              {isMyPost && (
-                <button onClick={handleDeletePost} style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#ffe3e3', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                  <i className="fas fa-trash-alt"></i> 삭제
-                </button>
-              )}
+              {/* 우측 액션 버튼 영역 (내 게시물: 삭제 / 남 게시물: 팔로우) */}
+              <div>
+                {!isMyPost ? (
+                  <button 
+                    style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #1A1A1A', background: 'transparent', color: '#1A1A1A', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    팔로우
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleDeletePost} 
+                    style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#ffe3e3', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    <i className="fas fa-trash-alt" style={{ marginRight: '4px' }}></i>삭제
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 고정 경로 지도 영역 */}
@@ -347,7 +359,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
                         </div>
                         <div style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.4' }}>{comment.text}</div>
                         
-                        {/* 🚨 [NEW] 답글 달기 & 댓글 삭제 액션 */}
+                        {/* 답글 달기 & 댓글 삭제 액션 */}
                         <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
                           <button onClick={() => setReplyingTo({ commentId: comment.id, authorName: comment.authorName })} style={{ background: 'none', border: 'none', color: '#ADB5BD', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}>답글 달기</button>
                           {auth.currentUser?.uid === comment.userId && (
@@ -357,7 +369,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
                       </div>
                     </div>
 
-                    {/* 🚨 [NEW] 대댓글(Replies) 리스트 */}
+                    {/* 대댓글(Replies) 리스트 */}
                     {comment.replies && comment.replies.length > 0 && (
                       <div style={{ marginLeft: '48px', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '2px' }}>
                         {comment.replies.map(reply => (
@@ -394,7 +406,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
         {post && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             
-            {/* 🚨 [NEW] 답글 남기는 중 표시 바 */}
+            {/* 답글 남기는 중 표시 바 */}
             {replyingTo && (
               <div style={{ width: '100%', padding: '8px 16px', backgroundColor: '#F1F3F5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#495057' }}>
                 <span><strong>{replyingTo.authorName}</strong>님에게 답글 남기는 중...</span>

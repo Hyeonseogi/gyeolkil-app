@@ -19,13 +19,14 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   return R * c; 
 };
 
-const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
+// 🚨 onNavigate props 추가됨
+const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
   const [posts, setPosts] = useState([]);
   const [gatherings, setGatherings] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   
-  const [filter, setFilter] = useState('all'); // 'all', 'following', 'nearby'
-  const [sortBy, setSortBy] = useState('latest'); // 🚨 [NEW] 'latest', 'popular', 'comments', 'scraps'
+  const [filter, setFilter] = useState('all'); 
+  const [sortBy, setSortBy] = useState('latest'); 
   const [selectedGathering, setSelectedGathering] = useState(null); 
 
   // 라이브 모집글 쓰기 모달 및 인풋 상태들
@@ -217,49 +218,82 @@ const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
     }
   };
 
+  // 🚨 [NEW] 동행 참여 및 채팅방 진입 로직
+  const handleJoinGathering = async (gatheringId) => {
+    const user = auth.currentUser;
+    if (!user) { alert('로그인이 필요합니다! 🔒'); return; }
+
+    try {
+      const gatheringRef = doc(db, 'gatherings', gatheringId);
+      await updateDoc(gatheringRef, {
+        currentMembers: arrayUnion(user.uid)
+      });
+      alert('🎉 동행에 성공적으로 참여했습니다! 채팅방으로 이동합니다.');
+      setSelectedGathering(null);
+      if (onNavigate) onNavigate('chat');
+    } catch (error) {
+      console.error('동행 참여 실패:', error);
+      alert('참여 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 🚨 [핵심 버그 수정] 마이페이지 연동을 위한 좋아요 로직 업데이트
   const handleToggleLike = async (e, postId, currentLikedBy = []) => {
     e.stopPropagation();
     const user = auth.currentUser;
     if (!user) return;
     try {
       const postRef = doc(db, 'posts', postId);
+      const userRef = doc(db, 'users', user.uid); // 내 유저 정보 레퍼런스
       const isLiked = currentLikedBy.includes(user.uid);
+      
+      // 1. 게시물 하트 수 업데이트
       await updateDoc(postRef, {
         likedBy: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
         likes: increment(isLiked ? -1 : 1)
       });
+      
+      // 2. 내 유저 정보에 하트 누른 글 기록 (마이페이지 동기화용)
+      await updateDoc(userRef, {
+        likedPosts: isLiked ? arrayRemove(postId) : arrayUnion(postId)
+      });
     } catch (error) { console.error(error); }
   };
 
+  // 🚨 [핵심 버그 수정] 마이페이지 연동을 위한 북마크 로직 업데이트
   const handleToggleSave = async (e, postId) => {
     e.stopPropagation();
     const user = auth.currentUser;
     if (!user) return;
     try {
       const postRef = doc(db, 'posts', postId);
+      const userRef = doc(db, 'users', user.uid); // 내 유저 정보 레퍼런스
       const postSnap = await getDoc(postRef);
       const savedBy = postSnap.data()?.savedBy || [];
       const alreadySaved = savedBy.includes(user.uid);
+      
+      // 1. 게시물 북마크 업데이트
       await updateDoc(postRef, {
         savedBy: alreadySaved ? arrayRemove(user.uid) : arrayUnion(user.uid),
         saves: increment(alreadySaved ? -1 : 1)
       });
+      
+      // 2. 내 유저 정보에 북마크한 글 기록 (마이페이지 동기화용)
+      await updateDoc(userRef, {
+        savedPosts: alreadySaved ? arrayRemove(postId) : arrayUnion(postId)
+      });
     } catch (error) { console.error(error); }
   };
 
-  // 🚨 [NEW] 필터(칩)와 정렬(드롭다운)을 모두 고려한 피드 정렬 로직
+  // 피드 정렬 로직
   const displayPosts = useMemo(() => {
     let filtered = posts;
-    
-    // 1. 칩 필터 적용
     if (filter === 'following') filtered = posts.filter((p) => following && following.includes(p.userId));
-    
-    // 2. 드롭다운 정렬 적용
     return [...filtered].sort((a, b) => {
       if (sortBy === 'popular') return (b.likes || 0) - (a.likes || 0);
       if (sortBy === 'comments') return (b.comments || 0) - (a.comments || 0);
       if (sortBy === 'scraps') return (b.saves || 0) - (a.saves || 0);
-      return b.createdAt - a.createdAt; // default: latest
+      return b.createdAt - a.createdAt; 
     });
   }, [posts, filter, following, sortBy]);
 
@@ -276,7 +310,6 @@ const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
       {/* 상단 탭 헤더 */}
       <div style={{ zIndex: 10, backgroundColor: '#fff', paddingBottom: '12px', borderBottom: '1px solid #f1f1f1' }}>
         
-        {/* 🚨 [NEW] 상단 타이틀 & 정렬 드롭다운 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 12px' }}>
           <h2 className="section-title" style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>최신 여정</h2>
           
@@ -295,7 +328,6 @@ const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
           </select>
         </div>
 
-        {/* 🚨 [NEW] 필터 칩 (딱 3개만 깔끔하게 유지) */}
         <div className="feed-filter" style={{ display: 'flex', gap: '8px', padding: '0 16px', overflowX: 'auto' }}>
           {['all', 'following', 'nearby'].map((f) => (
             <button
@@ -331,7 +363,6 @@ const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
               <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }}></div>
             )}
 
-            {/* 우측 하단 동행 모집하기 플로팅 버튼 (FAB) */}
             {!isLocating && myLocation && (
               <button 
                 onClick={() => setIsCreateModalOpen(true)}
@@ -398,6 +429,7 @@ const HomeTab = ({ following, onOpenModal, onOpenUser }) => {
                     </button>
                   ) : (
                     <button 
+                      onClick={() => handleJoinGathering(selectedGathering.id)}
                       disabled={selectedGathering.status === 'closed'}
                       style={{
                         width: '100%', padding: '16px', borderRadius: '14px', border: 'none',

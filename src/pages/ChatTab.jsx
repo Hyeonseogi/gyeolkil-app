@@ -373,7 +373,13 @@ const ChatTab = () => {
                     
                     {!isMine && (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', alignSelf: 'flex-start' }}>
-                        <img src={msg.userAvatar || msg.senderAvatar} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img 
+                          src={msg.userAvatar || msg.senderAvatar} 
+                          alt="profile" 
+                          // 🚨 [NEW] 이미지 로드 실패 시 디폴트 아바타로 교체
+                          onError={(e) => { e.target.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback' }} 
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
+                        />
                         <span style={{ fontSize: '10px', color: '#868E96' }}>{msg.userName || msg.senderName}</span>
                       </div>
                     )}

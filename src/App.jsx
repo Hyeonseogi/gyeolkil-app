@@ -94,7 +94,9 @@ function App() {
           <HomeTab 
             following={following} 
             onOpenModal={(id) => setSelectedPostId(id)} 
-            onOpenUser={(id) => { setSelectedUserId(id); setActiveTab('userProfile'); }} 
+            onOpenUser={(id) => { setSelectedUserId(id); setActiveTab('userProfile'); }}
+
+            onNavigate={(tabName) => setActiveTab(tabName)}
           />
         )}
         {activeTab === 'discover' && (
