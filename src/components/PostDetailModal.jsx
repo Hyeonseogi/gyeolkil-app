@@ -89,7 +89,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
     }
   };
 
-  // 댓글 & 대댓글 작성
+// 댓글 & 대댓글 작성
   const handleAddComment = async () => {
     const user = auth.currentUser;
     if (!user) { alert('로그인이 필요합니다.'); return; }
@@ -97,11 +97,10 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
 
     try {
       if (replyingTo) {
-        // 대댓글(답글) 모드
         const commentRef = doc(db, 'posts', postId, 'comments', replyingTo.commentId);
         await updateDoc(commentRef, {
           replies: arrayUnion({
-            id: Date.now().toString(), // 고유 ID
+            id: Date.now().toString(),
             text: commentInput,
             userId: user.uid,
             authorName: user.displayName,
@@ -109,9 +108,8 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
             createdAt: Date.now() 
           })
         });
-        setReplyingTo(null); // 답글 모드 해제
+        setReplyingTo(null);
       } else {
-        // 일반 댓글 모드
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
@@ -122,6 +120,7 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
           });
         }
 
+        // 1. 댓글 DB 저장
         await addDoc(collection(db, 'posts', postId, 'comments'), {
           text: commentInput,
           userId: user.uid,
@@ -130,18 +129,25 @@ const PostDetailModal = ({ postId, onClose, onOpenUser }) => {
           createdAt: serverTimestamp(),
           likes: 0,
           likedBy: [],
-          replies: [] // 대댓글을 담을 배열 초기화
+          replies: []
         });
 
         await updateDoc(doc(db, 'posts', postId), { comments: increment(1) });
 
-        const latestUserSnap = await getDoc(userRef);
-        const existing = latestUserSnap.data()?.commentedPosts || [];
-        if (!existing.includes(postId)) {
-          await updateDoc(userRef, { commentedPosts: arrayUnion(postId) });
+        // 🚨 [여기에 알림 로직 추가!]
+        if (post && post.userId !== user.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: post.userId,
+            senderId: user.uid,
+            senderName: user.displayName || '여행자',
+            type: 'comment',
+            message: `회원님의 여정에 댓글을 남겼습니다: "${commentInput.substring(0, 15)}${commentInput.length > 15 ? '...' : ''}"`,
+            postId: postId,
+            read: false,
+            createdAt: Date.now()
+          });
         }
       }
-
       setCommentInput('');
     } catch (error) {
       console.error('댓글 작성 실패:', error);
