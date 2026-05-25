@@ -16,6 +16,7 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { createSocialNotification } from '../data'; // 공통 소셜 알림 생성 헬퍼
 
 const PAGE_SIZE = 20;
 const POPULAR_LIMIT = 4;
@@ -255,7 +256,8 @@ const DiscoverTab = ({ posts, onOpenModal = () => {}, onOpenUser = () => {} }) =
     return () => observer.disconnect();
   }, [hasMore, isLoading, isLoadingMore, loadMorePosts]);
 
-  const handleToggleLike = async (e, postId, currentLikedBy = []) => {
+  // 좋아요 토글 + 좋아요 알림 생성
+  const handleToggleLike = async (e, postId, currentLikedBy = [], postUserId = '', postPreview = '') => {
     e.stopPropagation();
     const user = auth.currentUser;
     if (!user) return;
@@ -274,6 +276,16 @@ const DiscoverTab = ({ posts, onOpenModal = () => {}, onOpenUser = () => {} }) =
       const currentLiked = userSnap.data()?.likedPosts || [];
       const updatedLiked = isLiked ? currentLiked.filter((id) => id !== postId) : [...currentLiked, postId];
       await updateDoc(userRef, { likedPosts: updatedLiked });
+      if (!isLiked && postUserId && postUserId !== user.uid) {
+        // 공통 알림 헬퍼를 사용해 좋아요 알림 생성
+        await createSocialNotification({
+          receiverId: postUserId,
+          sender: user,
+          type: 'like',
+          postId,
+          postPreview
+        });
+      }
       fetchPopularPosts();
     } catch (error) {
       console.error(error);
@@ -495,7 +507,7 @@ const DiscoverTab = ({ posts, onOpenModal = () => {}, onOpenUser = () => {} }) =
 
                   <div style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#1A1A1A', marginBottom: '10px' }} onClick={(e) => e.stopPropagation()}>
-                      <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy)} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
+                      <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy, post.userId, post.title || post.body || '')} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
                         <i className={isLiked ? 'fas fa-heart' : 'far fa-heart'}></i>
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); onOpenModal(post.id); }} style={{ background: 'none', border: 'none', padding: 0, color: '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
