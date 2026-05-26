@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, collection, query, where, onSnapshot, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { createSocialNotification } from '../data';
 
 const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
   const [userData, setUserData] = useState(null);
@@ -27,7 +28,7 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
     if (currentUser) {
       const myRef = doc(db, 'users', currentUser.uid);
       unsubscribeMe = onSnapshot(myRef, (snap) => {
-        setIsFollowing(snap.data()?.following?.includes(userId));
+        setIsFollowing(!!snap.data()?.following?.includes(userId));
       });
     }
 
@@ -36,7 +37,11 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
     const unsubscribePosts = onSnapshot(q, (snapshot) => {
       const arr = [];
       snapshot.forEach((docSnap) => arr.push({ id: docSnap.id, ...docSnap.data() }));
-      setPosts(arr.sort((a, b) => b.createdAt - a.createdAt)); // 최신순 정렬 보정
+      setPosts(arr.sort((a, b) => {
+        const aTime = a?.createdAt?.toMillis ? a.createdAt.toMillis() : Number(a?.createdAt || 0);
+        const bTime = b?.createdAt?.toMillis ? b.createdAt.toMillis() : Number(b?.createdAt || 0);
+        return bTime - aTime;
+      }));
     });
 
     return () => {
@@ -48,7 +53,10 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
 
   // 팔로우 & 언팔로우 핸들러
   const handleToggleFollow = async () => {
-    if (!currentUser) { alert("로그인이 필요합니다."); return; }
+    if (!currentUser) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
 
     const myRef = doc(db, 'users', currentUser.uid);
     const targetRef = doc(db, 'users', userId);
@@ -62,6 +70,13 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
         // 팔로우
         await updateDoc(myRef, { following: arrayUnion(userId) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
+        // 팔로우 알림 생성
+        await createSocialNotification({
+          receiverId: userId,
+          sender: currentUser,
+          type: 'follow',
+          targetUserId: userId
+        });
       }
     } catch (error) {
       console.error('팔로우 처리 실패:', error);
@@ -71,7 +86,9 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
   // 총 방문 장소 계산 (발자취)
   const totalPlaces = useMemo(() => {
     let count = 0;
-    posts.forEach((post) => { count += post.route?.length || 0; });
+    posts.forEach((post) => {
+      count += post.route?.length || 0;
+    });
     return count;
   }, [posts]);
 
@@ -88,10 +105,24 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
 
   return (
     <section className="tab-page active" style={{ overflowY: 'auto', backgroundColor: '#fff', height: '100%', position: 'relative' }}>
-      
       {/* 상단 뒤로가기 헤더 */}
-      <div style={{ position: 'sticky', top: 0, backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', zIndex: 10, padding: '16px 20px', borderBottom: '1px solid #F1F3F5', display: 'flex', alignItems: 'center' }}>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}>
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          backgroundColor: 'rgba(255,255,255,0.9)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 10,
+          padding: '16px 20px',
+          borderBottom: '1px solid #F1F3F5',
+          display: 'flex',
+          alignItems: 'center'
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}
+        >
           <i className="fas fa-arrow-left"></i>
         </button>
         <span style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{userData.displayName}</span>
@@ -100,7 +131,6 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
       {/* 🚨 [NEW] 상단 프로필 영역 (MyPage와 동일한 레이아웃) */}
       <div style={{ padding: '24px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          
           <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, #52B788, #b7e4c7)' }}>
             <img
               src={userData.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'}
@@ -140,16 +170,34 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
             <button
               onClick={handleToggleFollow}
               style={{
-                flex: 1, padding: '8px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                background: isFollowing ? '#E9ECEF' : '#52B788', 
+                flex: 1,
+                padding: '8px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                background: isFollowing ? '#E9ECEF' : '#52B788',
                 color: isFollowing ? '#495057' : '#fff',
-                fontSize: '13px', fontWeight: 'bold', transition: 'all 0.2s'
+                fontSize: '13px',
+                fontWeight: 'bold',
+                transition: 'all 0.2s'
               }}
             >
               {isFollowing ? '팔로잉' : '팔로우'}
             </button>
           )}
-          <button style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#EBFBEE', fontSize: '13px', fontWeight: 'bold', color: '#2B8A3E', cursor: 'default' }}>
+          <button
+            style={{
+              flex: 1,
+              padding: '8px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#EBFBEE',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              color: '#2B8A3E',
+              cursor: 'default'
+            }}
+          >
             📍 방문 장소 {totalPlaces}곳
           </button>
         </div>
@@ -178,30 +226,55 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2px' }}>
             {posts.map((post) => {
-              const hasPhoto = post.route && post.route.length > 0 && post.route.some(s => s.photo);
-              const firstPhoto = hasPhoto ? post.route.find(s => s.photo).photo : null;
+              const hasPhoto = post.route && post.route.length > 0 && post.route.some((s) => s.photo);
+              const firstPhoto = hasPhoto ? post.route.find((s) => s.photo).photo : null;
 
               return (
                 <div
                   key={post.id}
                   onClick={() => onOpenModal(post.id)}
                   style={{
-                    aspectRatio: '1 / 1', overflow: 'hidden', cursor: 'pointer',
-                    position: 'relative', backgroundColor: '#F8F9FA'
+                    aspectRatio: '1 / 1',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    backgroundColor: '#F8F9FA'
                   }}
                 >
                   {firstPhoto ? (
                     <img src={firstPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px', textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '10px',
+                        textAlign: 'center'
+                      }}
+                    >
                       <span style={{ fontSize: '20px', marginBottom: '4px' }}>📍</span>
-                      <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#495057', wordBreak: 'keep-all' }}>{post.title.substring(0, 15)}...</span>
+                      <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#495057', wordBreak: 'keep-all' }}>
+                        {post.title.substring(0, 15)}...
+                      </span>
                     </div>
                   )}
 
                   {/* 다중 사진 아이콘 */}
-                  {hasPhoto && post.route.filter(s => s.photo).length > 1 && (
-                    <div style={{ position: 'absolute', top: '6px', right: '6px', color: '#fff', fontSize: '12px', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                  {hasPhoto && post.route.filter((s) => s.photo).length > 1 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        color: '#fff',
+                        fontSize: '12px',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)'
+                      }}
+                    >
                       <i className="far fa-clone"></i>
                     </div>
                   )}

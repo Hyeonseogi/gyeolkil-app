@@ -1,3 +1,6 @@
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from './firebase';
+
 /**
  * 곁길 — 샘플 데이터
  * 실제 서비스에서는 API / IndexedDB 로 대체
@@ -354,3 +357,132 @@ export function showToast(msg) {
 export function generateId() {
   return 'p' + Date.now() + Math.random().toString(36).slice(2, 7);
 }
+
+// 프로필 이미지가 없을 때 사용할 기본 아바타
+export const FALLBACK_AVATAR = 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback';
+
+// Firestore Timestamp / number / string 값을 모두 ms 숫자로 변환
+export const getTimestampValue = (value) => {
+  if (!value) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+// 알림 시간을 '방금 전 / n분 전 / n시간 전 / n월 n일' 형태로 포맷
+export const formatNotificationTime = (value) => {
+  const time = getTimestampValue(value);
+  if (!time) return '';
+
+  const diff = Date.now() - time;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diff < minute) return '방금 전';
+  if (diff < hour) return `${Math.floor(diff / minute)}분 전`;
+  if (diff < day) return `${Math.floor(diff / hour)}시간 전`;
+
+  const date = new Date(time);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+};
+
+// 알림 타입별로 화면에 보여줄 문구/미리보기 텍스트 구성
+export const buildNotificationContent = (notif = {}) => {
+  const senderName = notif.senderName || '여행자';
+  const previewText = typeof notif.previewText === 'string' ? notif.previewText.trim() : '';
+  const postPreview = typeof notif.postPreview === 'string' ? notif.postPreview.trim() : '';
+
+  switch (notif.type) {
+    case 'follow':
+      return {
+        title: `${senderName}님이 팔로우하였습니다.`,
+        preview: ''
+      };
+    case 'comment':
+      return {
+        title: `${senderName}님이 내 게시글에 댓글을 작성했습니다.`,
+        preview: previewText || postPreview
+      };
+    case 'like':
+      return {
+        title: `${senderName}님이 마음에 들어 합니다.`,
+        preview: postPreview
+      };
+    default:
+      return {
+        title: `${senderName}님이 ${notif.message || '새로운 활동을 남겼습니다.'}`,
+        preview: previewText || postPreview
+      };
+  }
+};
+
+// 타입별 아이콘 매핑
+export const getNotificationTypeIcon = (type) => {
+  switch (type) {
+    case 'like':
+      return 'fas fa-heart';
+    case 'comment':
+      return 'fas fa-comment';
+    case 'follow':
+      return 'fas fa-user-plus';
+    default:
+      return 'fas fa-bell';
+  }
+};
+
+// 타입별 강조 색상 매핑
+export const getNotificationTypeColors = (type) => {
+  switch (type) {
+    case 'like':
+      return {
+        bg: '#ff0f7b',
+        shadow: '0 6px 18px rgba(255, 15, 123, 0.35)'
+      };
+    case 'comment':
+      return {
+        bg: '#6c5ce7',
+        shadow: '0 6px 18px rgba(108, 92, 231, 0.35)'
+      };
+    case 'follow':
+      return {
+        bg: '#4dabf7',
+        shadow: '0 6px 18px rgba(77, 171, 247, 0.35)'
+      };
+    default:
+      return {
+        bg: '#adb5bd',
+        shadow: '0 6px 18px rgba(173, 181, 189, 0.25)'
+      };
+  }
+};
+
+// 좋아요 / 댓글 / 팔로우 알림 문서를 Firestore notifications 컬렉션에 저장
+export const createSocialNotification = async ({
+  receiverId,
+  sender,
+  type,
+  postId = null,
+  previewText = '',
+  postPreview = '',
+  targetUserId = null
+}) => {
+  if (!receiverId || !sender?.uid || receiverId === sender.uid) return;
+
+  await addDoc(collection(db, 'notifications'), {
+    receiverId,
+    senderId: sender.uid,
+    senderName: sender.displayName || '여행자',
+    senderAvatar: sender.photoURL || FALLBACK_AVATAR,
+    type,
+    postId,
+    targetUserId,
+    previewText,
+    postPreview,
+    read: false,
+    createdAt: Date.now()
+  });
+};
+

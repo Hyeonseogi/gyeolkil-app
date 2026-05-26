@@ -6,6 +6,7 @@ import {
   arrayUnion, arrayRemove, increment, onSnapshot, getDoc 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { createSocialNotification } from '../data'; // 공통 소셜 알림 생성 헬퍼
 
 import { serverTimestamp } from 'firebase/firestore';
 
@@ -240,7 +241,7 @@ const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
   };
 
   // 🚨 [핵심 버그 수정] 마이페이지 연동을 위한 좋아요 로직 업데이트
-  const handleToggleLike = async (e, postId, currentLikedBy = [], postUserId) => { // 🚨 postUserId(글쓴이 UID) 파라미터 추가!
+  const handleToggleLike = async (e, postId, currentLikedBy = [], postUserId, postPreview = '') => { // 🚨 postUserId(글쓴이 UID) 파라미터 추가!
   e.stopPropagation();
   const user = auth.currentUser;
   if (!user) return;
@@ -260,15 +261,13 @@ const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
 
     // 🚨 [여기가 핵심!!] 좋아요를 눌렀고(취소가 아니고), 내 글이 아닐 때 알림 전송!
     if (!isLiked && postUserId !== user.uid) {
-      await addDoc(collection(db, 'notifications'), {
-        receiverId: postUserId, // 글쓴이에게
-        senderId: user.uid, // 내가
-        senderName: user.displayName || '여행자',
+      // 공통 알림 헬퍼를 사용해 좋아요 알림 생성
+      await createSocialNotification({
+        receiverId: postUserId,
+        sender: user,
         type: 'like',
-        message: '내 여정에 좋아요를 눌렀습니다.',
-        postId: postId,
-        read: false,
-        createdAt: Date.now()
+        postId,
+        postPreview
       });
     }
 
@@ -558,7 +557,7 @@ const HomeTab = ({ following, onOpenModal, onOpenUser, onNavigate }) => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#1A1A1A', marginBottom: '10px' }} onClick={(e) => e.stopPropagation()}>
     
                         {/* 🚨 [여기가 핵심!!] post.userId 파라미터 추가! */}
-                        <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy, post.userId)} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
+                        <button onClick={(e) => handleToggleLike(e, post.id, post.likedBy, post.userId, post.title || post.body || '')} style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}>
                           <i className={isLiked ? "fas fa-heart" : "far fa-heart"}></i>
                         </button>
     
