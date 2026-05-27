@@ -11,6 +11,7 @@ import DiscoverTab from './pages/DiscoverTab';
 import RecordTab from './pages/RecordTab';
 import ChatTab from './pages/ChatTab';
 import MyPage from './pages/MyPage';
+import EditProfilePage from './pages/EditProfilePage';
 import UserProfilePage from './pages/UserProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import FootprintTab from './pages/FootprintTab';
@@ -389,7 +390,9 @@ function App() {
             onNavigate={(tabName) => setActiveTab(tabName)}
           />
         )}
-
+        {activeTab === 'edit-profile' && (
+          <EditProfilePage onNavigate={(tabName) => setActiveTab(tabName)} />
+        )}
         {activeTab === 'userProfile' && (
           <UserProfilePage
             key={selectedUserId}
