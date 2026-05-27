@@ -5,7 +5,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
-// 날짜/시간 포맷팅
 const formatChatTime = (timestamp) => {
   if (!timestamp) return '';
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -19,33 +18,24 @@ const formatChatTime = (timestamp) => {
 const ChatTab = () => {
   const currentUser = auth.currentUser;
   
-  // 🚨 [NEW] 상단 탭 스위치 상태: 'private' (개인 1:1) | 'gathering' (동행 그룹)
   const [chatMode, setChatMode] = useState('private'); 
-
-  // 데이터 상태
   const [followingUsers, setFollowingUsers] = useState([]);
   const [privateRooms, setPrivateRooms] = useState([]);
   const [gatheringRooms, setGatheringRooms] = useState([]);
   
-  // 현재 열려있는 채팅방 (type 프로퍼티로 private/gathering 구분)
   const [activeRoom, setActiveRoom] = useState(null); 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   
   const messagesEndRef = useRef(null);
 
-  // 자동 스크롤
   useEffect(() => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [messages]);
 
-  // ==========================================
-  // 1. 데이터 로드: 팔로잉 & 개인 채팅방
-  // ==========================================
   useEffect(() => {
     if (!currentUser) return;
     
-    // 팔로잉 유저 목록 가져오기
     const loadFollowing = async () => {
       const myRef = doc(db, 'users', currentUser.uid);
       const snap = await getDoc(myRef);
@@ -61,7 +51,6 @@ const ChatTab = () => {
     };
     loadFollowing();
 
-    // 1:1 채팅방 목록 실시간 로드
     const qPrivate = query(collection(db, 'chatRooms'), where('members', 'array-contains', currentUser.uid));
     const unsubPrivate = onSnapshot(qPrivate, (snapshot) => {
       const arr = [];
@@ -72,9 +61,6 @@ const ChatTab = () => {
     return () => unsubPrivate();
   }, [currentUser]);
 
-  // ==========================================
-  // 2. 데이터 로드: 동행 그룹 채팅방
-  // ==========================================
   useEffect(() => {
     if (!currentUser) return;
     const qGathering = query(collection(db, 'gatherings'), where('currentMembers', 'array-contains', currentUser.uid), orderBy('createdAt', 'desc'));
@@ -83,7 +69,6 @@ const ChatTab = () => {
       snapshot.forEach((docSnap) => arr.push({ id: docSnap.id, ...docSnap.data() }));
       setGatheringRooms(arr);
       
-      // 열려있던 동행 방이 폭파되었는지 체크
       if (activeRoom && activeRoom.type === 'gathering') {
         const stillExists = arr.find(r => r.id === activeRoom.id);
         if (!stillExists) setActiveRoom(null);
@@ -93,7 +78,6 @@ const ChatTab = () => {
     return () => unsubGathering();
   }, [currentUser, activeRoom]);
 
-  // 개인 채팅방 상대방 정보 매핑
   const privateRoomUsers = useMemo(() => {
     return privateRooms.map((room) => {
       const otherId = room.members.find((m) => m !== currentUser?.uid);
@@ -102,13 +86,9 @@ const ChatTab = () => {
     });
   }, [privateRooms, followingUsers, currentUser]);
 
-  // ==========================================
-  // 3. 메시지 실시간 로드 (활성화된 방 기준)
-  // ==========================================
   useEffect(() => {
     if (!activeRoom) return;
     
-    // activeRoom.type에 따라 컬렉션 경로 동적 분기
     const collectionPath = activeRoom.type === 'private' ? 'chatRooms' : 'gatherings';
     const q = query(collection(db, collectionPath, activeRoom.id, 'messages'), orderBy('createdAt', 'asc'));
     
@@ -120,12 +100,7 @@ const ChatTab = () => {
     
     return () => unsubscribe();
   }, [activeRoom]);
-
-  // ==========================================
-  // 4. 액션 로직 (방 생성, 전송, 나가기)
-  // ==========================================
   
-  // 1:1 방 생성 (또는 입장)
   const handleCreatePrivateRoom = async (targetUser) => {
     const roomId = [currentUser.uid, targetUser.uid].sort().join('_');
     const roomRef = doc(db, 'chatRooms', roomId);
@@ -141,7 +116,6 @@ const ChatTab = () => {
     setActiveRoom({ id: roomId, type: 'private', user: targetUser });
   };
 
-  // 메시지 전송
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeRoom) return;
@@ -160,14 +134,39 @@ const ChatTab = () => {
         createdAt: serverTimestamp()
       });
 
-      // 개인 채팅일 경우 방의 마지막 메시지 업데이트
       if (activeRoom.type === 'private') {
         await setDoc(doc(db, 'chatRooms', activeRoom.id), { lastMessage: msgText }, { merge: true });
       }
     } catch (error) { console.error('메시지 전송 에러:', error); }
   };
 
-  // 동행 방 나가기 (개인 채팅은 제외)
+  const handleLeavePrivateRoom = async () => {
+    if (!activeRoom || activeRoom.type !== 'private') return;
+
+    const confirmLeave = window.confirm(
+      "채팅방을 나가시겠습니까?\n내가 나가면 상대방과의 대화방 및 모든 메시지가 영구 삭제됩니다."
+    );
+    if (!confirmLeave) return;
+
+    try {
+      const deletePromises = messages.map((msg) => {
+        if (msg.id) {
+          return deleteDoc(doc(db, 'chatRooms', activeRoom.id, 'messages', msg.id));
+        }
+        return Promise.resolve();
+      });
+      await Promise.all(deletePromises);
+
+      await deleteDoc(doc(db, 'chatRooms', activeRoom.id));
+      
+      alert('채팅방을 나갔습니다.');
+      setActiveRoom(null); 
+    } catch (error) {
+      console.error('개인 채팅방 삭제 실패:', error);
+      alert('채팅방을 나가는 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleLeaveGatheringRoom = async () => {
     if (!window.confirm('채팅방에서 정말 나가시겠습니까?')) return;
 
@@ -196,15 +195,10 @@ const ChatTab = () => {
     } catch (error) { console.error('채팅방 나가기 실패:', error); }
   };
 
-  // 모바일 대응 (방이 열리면 리스트 숨김)
   const showList = !activeRoom;
 
   return (
     <section className="tab-page active" style={{ display: 'flex', backgroundColor: '#fcfcfc', height: '100%', overflow: 'hidden' }}>
-      
-      {/* ==========================================
-          📋 [1] 좌측/메인 채팅 목록 패널
-      ========================================== */}
       <div 
         style={{ 
           width: '100%', maxWidth: '360px', borderRight: '1px solid #eee', 
@@ -213,8 +207,6 @@ const ChatTab = () => {
       >
         <div style={{ padding: '20px 20px 10px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '20px', color: '#111' }}>메시지</h2>
-          
-          {/* 🚨 상단 토글 스위치 */}
           <div style={{ display: 'flex', gap: '8px', padding: '4px', backgroundColor: '#F1F3F5', borderRadius: '12px' }}>
             <button
               onClick={() => setChatMode('private')}
@@ -232,11 +224,8 @@ const ChatTab = () => {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px 20px' }}>
-          
-          {/* --- 👤 개인 채팅 모드 --- */}
           {chatMode === 'private' && (
             <>
-              {/* 팔로잉 바 */}
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>팔로잉 친구들 (대화 시작)</div>
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '14px', paddingBottom: '8px' }} className="photo-slider">
@@ -253,7 +242,6 @@ const ChatTab = () => {
                 </div>
               </div>
 
-              {/* 최근 1:1 대화 목록 */}
               <div>
                 <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>최근 대화</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -278,7 +266,6 @@ const ChatTab = () => {
             </>
           )}
 
-          {/* --- 🗺️ 동행 채팅 모드 --- */}
           {chatMode === 'gathering' && (
             <div>
               <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>참여 중인 동행</div>
@@ -307,24 +294,17 @@ const ChatTab = () => {
               </div>
             </div>
           )}
-
         </div>
       </div>
 
-      {/* ==========================================
-          🚪 [2] 우측/메인 대화창 패널
-      ========================================== */}
       <div style={{ flex: 1, display: !showList ? 'flex' : 'none', flexDirection: 'column', backgroundColor: '#F8F9FA' }}>
-        
         {!activeRoom ? (
-          // 방이 선택되지 않았을 때 (PC 뷰)
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#adb5bd' }}>
             <i className="far fa-comments" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}></i>
             대화방을 선택해주세요.
           </div>
         ) : (
           <>
-            {/* --- 대화방 헤더 --- */}
             <div style={{ padding: '16px 20px', backgroundColor: '#fff', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button onClick={() => setActiveRoom(null)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', padding: '0 8px 0 0' }}>
@@ -344,18 +324,19 @@ const ChatTab = () => {
                 )}
               </div>
 
-              {/* 🚨 동행 방일 때만 나가기 버튼 활성화 */}
-              {activeRoom.type === 'gathering' && (
-                <button onClick={handleLeaveGatheringRoom} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#ADB5BD', cursor: 'pointer' }}>
+              {activeRoom.type === 'gathering' ? (
+                <button onClick={handleLeaveGatheringRoom} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#E03131', cursor: 'pointer', padding: '4px' }} title="동행방 나가기">
+                  <i className="fas fa-sign-out-alt"></i>
+                </button>
+              ) : (
+                <button onClick={handleLeavePrivateRoom} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#E03131', cursor: 'pointer', padding: '4px' }} title="대화방 삭제 및 나가기">
                   <i className="fas fa-sign-out-alt"></i>
                 </button>
               )}
             </div>
 
-            {/* --- 메시지 리스트 --- */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {messages.map((msg, index) => {
-                // 시스템 메시지 렌더링
                 if (msg.userId === 'system') {
                   return (
                     <div key={msg.id || index} style={{ textAlign: 'center', margin: '8px 0' }}>
@@ -366,17 +347,15 @@ const ChatTab = () => {
                   );
                 }
 
-                const isMine = (msg.userId || msg.senderId) === currentUser?.uid; // 기존 1:1 채팅의 senderId 호환
+                const isMine = (msg.userId || msg.senderId) === currentUser?.uid;
 
                 return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: '8px' }}>
-                    
                     {!isMine && (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', alignSelf: 'flex-start' }}>
                         <img 
                           src={msg.userAvatar || msg.senderAvatar} 
                           alt="profile" 
-                          // 🚨 [NEW] 이미지 로드 실패 시 디폴트 아바타로 교체
                           onError={(e) => { e.target.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback' }} 
                           style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
                         />
@@ -401,7 +380,6 @@ const ChatTab = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* --- 메시지 입력창 --- */}
             <form onSubmit={handleSendMessage} style={{ borderTop: '1px solid #E5E7EB', padding: '16px 20px', display: 'flex', gap: '12px', backgroundColor: '#fff' }}>
               <input
                 value={newMessage}

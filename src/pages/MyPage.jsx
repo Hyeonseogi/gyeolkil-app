@@ -147,7 +147,10 @@ const MyPage = ({ onOpenModal, onNavigate }) => {
 
         {/* 🚨 [NEW] 통계 및 프로필 편집 영역 */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-          <button style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #E5E7EB', background: '#F8F9FA', fontSize: '13px', fontWeight: 'bold', color: '#1A1A1A', cursor: 'pointer' }}>
+          <button 
+            onClick={() => onNavigate('edit-profile')} // 🚨 이 라우팅 식별자 추가
+            style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #E1E4E6', backgroundColor: '#fff', fontWeight: '500', fontSize: '13px', cursor: 'pointer' }}
+          >
             프로필 편집
           </button>
           <button onClick={() => onNavigate && onNavigate('footprint')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#EBFBEE', fontSize: '13px', fontWeight: 'bold', color: '#2B8A3E', cursor: 'pointer' }}>
