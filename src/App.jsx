@@ -1,20 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore'; // 🚨 onSnapshot, updateDoc 추가
-import { auth, db } from './firebase';
+import { collection, query, where, orderBy, onSnapshot, doc, writeBatch } from 'firebase/firestore';
+import { auth, db, missingFirebaseKeys } from './firebase';
 
 import LoginScreen from './components/LoginScreen';
 import PostDetailModal from './components/PostDetailModal';
+import SetupNotice from './components/SetupNotice';
 
 import HomeTab from './pages/HomeTab';
 import DiscoverTab from './pages/DiscoverTab';
-import RecordTab from './pages/RecordTab';
 import ChatTab from './pages/ChatTab';
 import MyPage from './pages/MyPage';
 import EditProfilePage from './pages/EditProfilePage';
 import UserProfilePage from './pages/UserProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import FootprintTab from './pages/FootprintTab';
+
+/**
+ * 기록 탭은 EXIF 파서(exifr) · HEIC 변환기(heic2any) · 이미지 압축기를 쓰는데,
+ * 이 라이브러리들만 1.4MB 가 넘는다. 실제로 기록을 시작할 때 내려받도록 분리한다.
+ */
+const RecordTab = lazy(() => import('./pages/RecordTab'));
 
 import {
   buildNotificationContent,
@@ -30,30 +36,43 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
-  const [myPostCount, setMyPostCount] = useState(0);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [following, setFollowing] = useState([]);
-  // 🚨 [NEW] 알림 데이터 상태 관리
   const [notifications, setNotifications] = useState([]);
 
-  // 안 읽은 알림 개수 계산
+  // 안 읽은 알림 개수
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
-  // 로그인 상태 확인
+  // 로그인 상태 확인 (로그아웃 시 화면에 남는 데이터도 함께 비운다)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsAuthChecking(false);
+      if (!user) {
+        setFollowing([]);
+        setNotifications([]);
+        setActiveTab('home');
+        setSelectedPostId(null);
+        setSelectedUserId(null);
+        setIsNotifOpen(false);
+      }
     });
     return () => unsubscribe();
   }, []);
 
+  /**
+   * 프로필을 수정하면 Firebase 는 같은 user 객체를 그대로 변경하기 때문에
+   * React 가 변화를 감지하지 못한다. 새 참조로 교체해 화면을 갱신한다.
+   */
+  const refreshCurrentUser = useCallback(async () => {
+    if (!auth.currentUser) return;
+    await auth.currentUser.reload();
+    setCurrentUser(Object.assign(Object.create(Object.getPrototypeOf(auth.currentUser)), auth.currentUser));
+  }, []);
+
   // 현재 로그인 유저의 팔로잉 목록 실시간 동기화
   useEffect(() => {
-    if (!currentUser) {
-      setFollowing([]);
-      return;
-    }
+    if (!currentUser) return undefined;
 
     const unsubscribe = onSnapshot(doc(db, 'users', currentUser.uid), (snap) => {
       setFollowing(snap.data()?.following || []);
@@ -62,9 +81,9 @@ function App() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // 🚨 [NEW] 실시간 알림 로드 로직
+  // 실시간 알림 로드
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) return undefined;
 
     const q = query(
       collection(db, 'notifications'),
@@ -72,63 +91,68 @@ function App() {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notifs = [];
-      snapshot.forEach((docSnap) => notifs.push({ id: docSnap.id, ...docSnap.data() }));
-      setNotifications(notifs);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setNotifications(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+      },
+      (error) => console.error('알림 구독 실패:', error)
+    );
 
     return () => unsubscribe();
   }, [currentUser]);
 
-  // 내 게시글 수 카운트
+  // 알림 패널이 열려 있는 동안 배경 스크롤 방지
   useEffect(() => {
-    if (!currentUser) {
-      setMyPostCount(0);
-      return;
-    }
+    if (!isNotifOpen) return undefined;
 
-    const q = query(collection(db, 'posts'), where('userId', '==', currentUser.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMyPostCount(snapshot.size);
-    });
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  // 알림 패널 열릴 때 스크롤 방지 및 읽음 처리
-  useEffect(() => {
-    document.body.style.overflow = isNotifOpen ? 'hidden' : 'auto';
-
-    // 🚨 패널이 열리면 모든 안 읽은 알림을 '읽음(read: true)'으로 업데이트!
-    if (isNotifOpen && unreadCount > 0) {
-      const unreadNotifications = notifications.filter((notif) => !notif.read);
-      Promise.all(
-        unreadNotifications.map((notif) =>
-          updateDoc(doc(db, 'notifications', notif.id), { read: true }).catch((e) => {
-            console.error('알림 읽음 처리 실패:', e);
-          })
-        )
-      );
-    }
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setIsNotifOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
 
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isNotifOpen, unreadCount, notifications]);
+  }, [isNotifOpen]);
 
-  const closeAllPanels = () => {
-    setIsNotifOpen(false);
-  };
+  /**
+   * 패널을 열면 안 읽은 알림을 한 번에 읽음 처리한다.
+   * 문서를 하나씩 updateDoc 하면 알림 수만큼 쓰기가 발생하므로 batch 로 묶는다.
+   */
+  const openNotifications = useCallback(async () => {
+    setIsNotifOpen(true);
+
+    const unread = notifications.filter((n) => !n.read);
+    if (unread.length === 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      // Firestore batch 는 한 번에 500 건까지 처리할 수 있다.
+      unread.slice(0, 500).forEach((notif) => {
+        batch.update(doc(db, 'notifications', notif.id), { read: true });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('알림 읽음 처리 실패:', error);
+    }
+  }, [notifications]);
+
+  const closeAllPanels = () => setIsNotifOpen(false);
 
   // 특정 유저 프로필 화면으로 이동
-  const handleOpenUserProfile = (userId) => {
+  const handleOpenUserProfile = useCallback((userId) => {
     if (!userId) return;
+    setSelectedPostId(null);
     setSelectedUserId(userId);
     setActiveTab('userProfile');
-  };
+  }, []);
 
-  // 🚨 [NEW] 알림 클릭 시 해당 게시물 또는 유저 프로필로 이동
+  // 알림 클릭 시 해당 게시물 또는 유저 프로필로 이동
   const handleNotifClick = (notif) => {
     closeAllPanels();
 
@@ -142,10 +166,13 @@ function App() {
       return;
     }
 
-    if (notif.type === 'chat') {
-      setActiveTab('chat');
-    }
+    if (notif.type === 'chat') setActiveTab('chat');
   };
+
+  // 환경 변수가 비어 있으면 로그인 자체가 불가능하므로 원인을 먼저 안내
+  if (missingFirebaseKeys.length > 0) {
+    return <SetupNotice missingKeys={missingFirebaseKeys} />;
+  }
 
   if (isAuthChecking) {
     return (
@@ -164,14 +191,26 @@ function App() {
       {/* 상단 앱바 */}
       <header className="top-bar">
         <div className="top-bar-left">
-          <span className="app-logo-small" onClick={() => setActiveTab('home')} style={{ cursor: 'pointer' }}>
+          <span
+            className="app-logo-small"
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab('home')}
+            onKeyDown={(e) => e.key === 'Enter' && setActiveTab('home')}
+            style={{ cursor: 'pointer' }}
+          >
             🗺️ 곁길
           </span>
         </div>
 
         <div className="top-bar-right" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          {/* 🚨 [NEW] 알림 버튼 & 안 읽은 배지(Badge) UI */}
-          <button className="icon-btn" onClick={() => setIsNotifOpen(true)} style={{ position: 'relative' }} aria-label="알림 열기">
+          {/* 알림 버튼 & 안 읽은 배지 */}
+          <button
+            className="icon-btn"
+            onClick={openNotifications}
+            style={{ position: 'relative' }}
+            aria-label={unreadCount > 0 ? `알림 열기, 안 읽은 알림 ${unreadCount}개` : '알림 열기'}
+          >
             <i className="fas fa-bell"></i>
             {unreadCount > 0 && (
               <span
@@ -199,15 +238,18 @@ function App() {
             )}
           </button>
 
-          <button className="icon-btn" onClick={() => setActiveTab('settings')}>
+          <button className="icon-btn" onClick={() => setActiveTab('settings')} aria-label="설정 열기">
             <i className="fas fa-gear"></i>
           </button>
         </div>
       </header>
 
-      {/* 🚨 [NEW] 실제 데이터가 렌더링되는 알림 사이드 패널 */}
+      {/* 알림 사이드 패널 */}
       <div
         className={`side-panel ${isNotifOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-label="알림"
+        aria-hidden={!isNotifOpen}
         style={{
           zIndex: 1100,
           background: '#ffffff',
@@ -227,9 +269,7 @@ function App() {
             background: '#ffffff'
           }}
         >
-          <div>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>알림</h3>
-          </div>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>알림</h3>
 
           <button
             onClick={closeAllPanels}
@@ -265,7 +305,10 @@ function App() {
               return (
                 <li
                   key={notif.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleNotifClick(notif)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleNotifClick(notif)}
                   style={{
                     position: 'relative',
                     padding: '18px 18px 16px',
@@ -281,7 +324,10 @@ function App() {
                   <div style={{ position: 'relative', flexShrink: 0, marginTop: '2px' }}>
                     <img
                       src={notif.senderAvatar || FALLBACK_AVATAR}
-                      alt={notif.senderName || '사용자'}
+                      alt=""
+                      onError={(e) => {
+                        e.currentTarget.src = FALLBACK_AVATAR;
+                      }}
                       style={{
                         width: '42px',
                         height: '42px',
@@ -313,7 +359,7 @@ function App() {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0, paddingRight: '14px' }}>
-                    <p style={{ margin: 0, fontSize: '17px', color: '#1A1A1A', lineHeight: '1.45', fontWeight: '700' }}>
+                    <p style={{ margin: 0, fontSize: '15px', color: '#1A1A1A', lineHeight: '1.45', fontWeight: '700' }}>
                       {title}
                       <span style={{ color: '#868E96', fontWeight: '500' }}> · {formatNotificationTime(notif.createdAt)}</span>
                     </p>
@@ -322,7 +368,7 @@ function App() {
                       <p
                         style={{
                           margin: '6px 0 0',
-                          fontSize: '15px',
+                          fontSize: '14px',
                           color: '#495057',
                           lineHeight: '1.45',
                           whiteSpace: 'nowrap',
@@ -337,6 +383,7 @@ function App() {
 
                   {!notif.read && (
                     <span
+                      aria-label="읽지 않음"
                       style={{
                         position: 'absolute',
                         right: '12px',
@@ -361,69 +408,102 @@ function App() {
       <main className="tab-contents">
         {activeTab === 'home' && (
           <HomeTab
+            currentUser={currentUser}
             following={following}
-            onOpenModal={(id) => setSelectedPostId(id)}
-            onOpenUser={(id) => {
-              setSelectedUserId(id);
-              setActiveTab('userProfile');
-            }}
-            onNavigate={(tabName) => setActiveTab(tabName)}
+            onOpenModal={setSelectedPostId}
+            onOpenUser={handleOpenUserProfile}
+            onNavigate={setActiveTab}
           />
         )}
 
         {activeTab === 'discover' && (
           <DiscoverTab
-            onOpenModal={(id) => setSelectedPostId(id)}
-            onOpenUser={(id) => {
-              setSelectedUserId(id);
-              setActiveTab('userProfile');
-            }}
+            currentUser={currentUser}
+            onOpenModal={setSelectedPostId}
+            onOpenUser={handleOpenUserProfile}
           />
         )}
 
-        {activeTab === 'record' && <RecordTab onPublish={() => setActiveTab('home')} />}
-        {activeTab === 'chat' && <ChatTab />}
+        {activeTab === 'record' && (
+          <Suspense
+            fallback={
+              <div style={{ padding: '80px 20px', textAlign: 'center', color: '#ADB5BD' }}>
+                기록 도구를 준비하는 중... 📷
+              </div>
+            }
+          >
+            <RecordTab currentUser={currentUser} onPublish={() => setActiveTab('home')} />
+          </Suspense>
+        )}
+        {activeTab === 'chat' && <ChatTab currentUser={currentUser} />}
 
         {activeTab === 'mypage' && (
-          <MyPage
-            onOpenModal={(id) => setSelectedPostId(id)}
-            onNavigate={(tabName) => setActiveTab(tabName)}
-          />
+          <MyPage currentUser={currentUser} onOpenModal={setSelectedPostId} onNavigate={setActiveTab} />
         )}
         {activeTab === 'edit-profile' && (
-          <EditProfilePage onNavigate={(tabName) => setActiveTab(tabName)} />
+          <EditProfilePage
+            currentUser={currentUser}
+            onProfileUpdated={refreshCurrentUser}
+            onNavigate={setActiveTab}
+          />
         )}
         {activeTab === 'userProfile' && (
           <UserProfilePage
             key={selectedUserId}
+            currentUser={currentUser}
             userId={selectedUserId}
-            onOpenModal={(id) => setSelectedPostId(id)}
+            onOpenModal={setSelectedPostId}
             onClose={() => setActiveTab('home')}
           />
         )}
 
         {activeTab === 'settings' && <SettingsPage onClose={() => setActiveTab('mypage')} />}
-        {activeTab === 'footprint' && <FootprintTab onClose={() => setActiveTab('mypage')} />}
+        {activeTab === 'footprint' && (
+          <FootprintTab currentUser={currentUser} onOpenModal={setSelectedPostId} onClose={() => setActiveTab('mypage')} />
+        )}
       </main>
 
       {/* 하단 네비게이션 바 */}
-      <nav className="bottom-nav">
-        <button className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+      <nav className="bottom-nav" aria-label="주요 메뉴">
+        <button
+          className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
+          onClick={() => setActiveTab('home')}
+          aria-current={activeTab === 'home' ? 'page' : undefined}
+        >
           <i className="fas fa-home"></i><span>홈</span>
         </button>
-        <button className={`nav-btn ${activeTab === 'discover' ? 'active' : ''}`} onClick={() => setActiveTab('discover')}>
+        <button
+          className={`nav-btn ${activeTab === 'discover' ? 'active' : ''}`}
+          onClick={() => setActiveTab('discover')}
+          aria-current={activeTab === 'discover' ? 'page' : undefined}
+        >
           <i className="fas fa-compass"></i><span>발견</span>
         </button>
-        <button className={`nav-btn record-nav-btn ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>
+        <button
+          className={`nav-btn record-nav-btn ${activeTab === 'record' ? 'active' : ''}`}
+          onClick={() => setActiveTab('record')}
+          aria-label="여정 기록하기"
+        >
           <div className="record-btn-inner"><i className="fas fa-camera"></i></div>
         </button>
-        <button className={`nav-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+        <button
+          className={`nav-btn ${activeTab === 'chat' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chat')}
+          aria-current={activeTab === 'chat' ? 'page' : undefined}
+        >
           <i className="fas fa-comment-dots"></i><span>채팅</span>
         </button>
-        <button className={`nav-btn ${activeTab === 'mypage' || activeTab === 'footprint' ? 'active' : ''}`} onClick={() => setActiveTab('mypage')}>
+        <button
+          className={`nav-btn ${activeTab === 'mypage' || activeTab === 'footprint' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mypage')}
+          aria-label="마이페이지"
+        >
           <img
             src={currentUser.photoURL || FALLBACK_AVATAR}
-            alt="프로필"
+            alt=""
+            onError={(e) => {
+              e.currentTarget.src = FALLBACK_AVATAR;
+            }}
             style={{
               width: '28px',
               height: '28px',
@@ -438,12 +518,9 @@ function App() {
       {/* 게시글 모달 */}
       <PostDetailModal
         postId={selectedPostId}
+        currentUser={currentUser}
         onClose={() => setSelectedPostId(null)}
-        onOpenUser={(id) => {
-          setSelectedPostId(null);
-          setSelectedUserId(id);
-          setActiveTab('userProfile');
-        }}
+        onOpenUser={handleOpenUserProfile}
       />
     </div>
   );

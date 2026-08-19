@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// 곁길(Gyeolkil) Cloud Storage 보안 규칙
+//
+// 배포:  firebase deploy --only storage
+//
+//  - 사진은 로그인한 사용자만 볼 수 있다.
+//  - 업로드는 본인 폴더에만, 이미지 파일로, 10MB 이하만 허용한다.
+//    (앱에서 이미 1MB 이하로 압축하지만 서버에서도 한 번 더 막는다)
+// ─────────────────────────────────────────────────────────────
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // 여정 사진 — posts/{uid}/{파일명}
+    match /posts/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId && isValidImage();
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 프로필 사진 — profiles/{uid}_{timestamp}
+    match /profiles/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && fileName.matches(request.auth.uid + '_.*')
+        && isValidImage();
+    }
+
+    // 그 외 경로는 모두 차단
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
