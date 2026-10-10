@@ -9,6 +9,7 @@ import {
   getNotificationTypeColors,
   getNotificationTypeIcon,
   getRegionFromCoords,
+  getLikeCount,
   getTimestampValue,
   hasLocation,
   REGION_LABELS
@@ -45,6 +46,20 @@ describe('getDistanceFromLatLonInKm — 하버사인 거리', () => {
     const a = getDistanceFromLatLonInKm(37.5665, 126.978, 33.4996, 126.5312);
     const b = getDistanceFromLatLonInKm(33.4996, 126.5312, 37.5665, 126.978);
     expect(a).toBeCloseTo(b, 6);
+  });
+});
+
+describe('getLikeCount — 좋아요 수', () => {
+  it('likedBy 배열이 있으면 그 길이를 쓴다 (likes 숫자와 어긋나도)', () => {
+    expect(getLikeCount({ likedBy: ['a', 'b'], likes: 5 })).toBe(2);
+    expect(getLikeCount({ likedBy: [], likes: 3 })).toBe(0);
+  });
+
+  it('likedBy 가 없는 예전 글은 likes 숫자를 쓰고, 음수나 이상한 값은 0', () => {
+    expect(getLikeCount({ likes: 7 })).toBe(7);
+    expect(getLikeCount({ likes: -1 })).toBe(0);
+    expect(getLikeCount({ likes: 'abc' })).toBe(0);
+    expect(getLikeCount(null)).toBe(0);
   });
 });
 

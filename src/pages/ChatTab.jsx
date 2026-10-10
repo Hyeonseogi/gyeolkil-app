@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   collection,
   query,
@@ -10,14 +10,12 @@ import {
   arrayRemove,
   addDoc,
   serverTimestamp,
-  deleteDoc,
   getDoc,
-  getDocs,
-  setDoc,
-  writeBatch
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { FALLBACK_AVATAR, getTimestampValue, showToast } from '../data';
+import { deleteChatRoomCascade, deleteGatheringCascade } from '../deletion';
 
 const formatChatTime = (timestamp) => {
   const ms = getTimestampValue(timestamp);
@@ -243,20 +241,6 @@ const ChatTab = ({ currentUser }) => {
     }
   };
 
-  /** 하위 messages 컬렉션까지 삭제 (문서만 지우면 하위 문서가 그대로 남는다) */
-  const deleteRoomWithMessages = useCallback(async (collectionPath, roomId) => {
-    const msgsSnap = await getDocs(collection(db, collectionPath, roomId, 'messages'));
-    const docs = msgsSnap.docs;
-
-    for (let i = 0; i < docs.length; i += 400) {
-      const batch = writeBatch(db);
-      docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-    }
-
-    await deleteDoc(doc(db, collectionPath, roomId));
-  }, []);
-
   const handleLeavePrivateRoom = async () => {
     if (!activeRoom || activeRoom.type !== 'private') return;
 
@@ -266,7 +250,7 @@ const ChatTab = ({ currentUser }) => {
     if (!confirmLeave) return;
 
     try {
-      await deleteRoomWithMessages('chatRooms', activeRoom.id);
+      await deleteChatRoomCascade(activeRoom.id);
       setActiveRoom(null);
       showToast('채팅방을 나갔습니다.');
     } catch (error) {
@@ -289,11 +273,13 @@ const ChatTab = ({ currentUser }) => {
 
     try {
       if (isHost) {
-        await deleteRoomWithMessages('gatherings', activeRoom.id);
+        await deleteGatheringCascade(activeRoom.id);
         showToast('동행 모집이 취소되었습니다.');
       } else {
+        // 정원이 차서 마감됐던 모집도 한 명이 나가면 다시 모집 중이 된다.
         await updateDoc(doc(db, 'gatherings', activeRoom.id), {
-          currentMembers: arrayRemove(currentUser.uid)
+          currentMembers: arrayRemove(currentUser.uid),
+          status: 'recruiting'
         });
         await addDoc(collection(db, 'gatherings', activeRoom.id, 'messages'), {
           text: `👋 ${currentUser.displayName || '여행자'}님이 퇴장하셨습니다.`,

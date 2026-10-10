@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { signOut, deleteUser } from 'firebase/auth';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { GoogleAuthProvider, deleteUser, reauthenticateWithPopup, signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 import { showToast } from '../data';
+import { deleteAccountData } from '../deletion';
 
 const rowStyle = {
   width: '100%',
@@ -22,6 +22,7 @@ const rowStyle = {
 const SettingsPage = ({ onClose }) => {
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState('');
 
   const handleLogout = async () => {
     try {
@@ -34,7 +35,9 @@ const SettingsPage = ({ onClose }) => {
 
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm(
-      '정말 탈퇴하시겠습니까?\n작성하신 여정과 프로필이 삭제되며 복구할 수 없습니다.'
+      '정말 탈퇴하시겠습니까?\n\n' +
+        '작성한 여정과 사진, 동행 모집, 채팅, 알림, 프로필이 모두 삭제되며 복구할 수 없습니다.\n' +
+        '(다른 사람 글에 남긴 댓글은 남습니다)'
     );
     if (!confirmed || isDeleting) return;
 
@@ -43,23 +46,34 @@ const SettingsPage = ({ onClose }) => {
 
     setIsDeleting(true);
     try {
-      // 1. Firestore users 문서 삭제
-      await deleteDoc(doc(db, 'users', user.uid));
-      // 2. Firebase Auth 계정 삭제
+      // 1. 본인 확인을 먼저 받는다.
+      //    예전에는 데이터를 지운 뒤에 계정 삭제가 '재로그인 필요'로 실패해서,
+      //    프로필만 사라지고 계정은 남는 어중간한 상태가 됐다.
+      setDeleteProgress('본인 확인 중...');
+      await reauthenticateWithPopup(user, new GoogleAuthProvider());
+
+      // 2. 내 데이터 정리 → 3. 마지막에 계정 삭제
+      await deleteAccountData(user.uid, setDeleteProgress);
+      setDeleteProgress('계정을 삭제하는 중...');
       await deleteUser(user);
       showToast('그동안 곁길을 이용해주셔서 감사합니다.', 'success');
     } catch (error) {
       console.error('회원탈퇴 실패:', error);
 
-      // 민감한 작업이라 최근 로그인 상태를 요구한다.
-      if (error.code === 'auth/requires-recent-login') {
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        showToast('본인 확인이 취소되어 탈퇴하지 않았습니다.');
+      } else if (error.code === 'auth/user-mismatch') {
+        showToast('지금 로그인한 계정으로 본인 확인을 해주세요.', 'error');
+      } else if (error.code === 'auth/requires-recent-login') {
         showToast('보안을 위해 다시 로그인한 뒤 탈퇴해 주세요.', 'error');
         await signOut(auth);
       } else {
-        showToast('탈퇴 처리 중 오류가 발생했습니다.', 'error');
+        // 계정은 그대로 남아 있으므로 다시 시도하면 남은 데이터부터 이어서 지운다.
+        showToast('탈퇴 처리 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
       }
     } finally {
       setIsDeleting(false);
+      setDeleteProgress('');
     }
   };
 
@@ -125,7 +139,7 @@ const SettingsPage = ({ onClose }) => {
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <i className="fas fa-user-slash" style={{ color: '#e63946', width: '20px' }}></i>
-              {isDeleting ? '탈퇴 처리 중...' : '회원탈퇴'}
+              {isDeleting ? deleteProgress || '탈퇴 처리 중...' : '회원탈퇴'}
             </span>
             <i className="fas fa-chevron-right" style={{ color: '#DEE2E6', fontSize: '14px' }}></i>
           </button>
@@ -166,7 +180,8 @@ const SettingsPage = ({ onClose }) => {
               <p>
                 <strong>보관 및 파기</strong>
                 <br />
-                회원 탈퇴 시 프로필 정보는 즉시 삭제됩니다. 위치 권한은 브라우저 설정에서 언제든 철회할 수 있습니다.
+                회원 탈퇴 시 프로필, 작성한 여정과 사진, 동행 모집, 채팅, 알림이 즉시 삭제됩니다.
+                다른 사람의 글에 남긴 댓글은 남습니다. 위치 권한은 브라우저 설정에서 언제든 철회할 수 있습니다.
               </p>
               <p style={{ marginBottom: 0, color: '#868E96' }}>
                 본 문서는 교내 학술제 출품용 시연 서비스 기준으로 작성되었습니다.

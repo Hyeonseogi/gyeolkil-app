@@ -12,18 +12,18 @@ import {
   arrayRemove,
   increment,
   getDoc,
-  getDocs,
   setDoc,
-  deleteDoc,
-  writeBatch
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { deletePostCascade } from '../deletion';
 import RouteMap from './RouteMap';
 import {
   FALLBACK_AVATAR,
   REGION_LABELS,
   createSocialNotification,
   formatTime,
+  getLikeCount,
   getTimestampValue,
   showToast
 } from '../data';
@@ -197,21 +197,12 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
     }
   };
 
-  /** 게시물 삭제 — 하위 댓글까지 함께 지운다 (문서만 지우면 댓글이 남는다) */
+  /** 게시물 삭제 — 하위 댓글과 Storage 의 사진 파일까지 함께 지운다 */
   const handleDeletePost = async () => {
-    if (!window.confirm('정말 이 여정을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
+    if (!post || !window.confirm('정말 이 여정을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
 
     try {
-      const commentsSnap = await getDocs(collection(db, 'posts', postId, 'comments'));
-      const docs = commentsSnap.docs;
-
-      for (let i = 0; i < docs.length; i += 400) {
-        const batch = writeBatch(db);
-        docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      await deleteDoc(doc(db, 'posts', postId));
+      await deletePostCascade(post);
       showToast('게시물이 삭제되었습니다.');
       onClose();
     } catch (error) {
@@ -375,7 +366,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
   const userName = post?.authorName || '여행자';
   const userAvatar = post?.authorAvatar || FALLBACK_AVATAR;
-  const likeCount = Math.max(0, post?.likes || 0);
+  const likeCount = getLikeCount(post);
   const regionLabel = post?.region ? REGION_LABELS[post.region] || post.region : null;
 
   return (

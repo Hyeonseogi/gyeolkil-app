@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import RouteMap from './RouteMap';
-import { FALLBACK_AVATAR, formatTime } from '../data';
+import { FALLBACK_AVATAR, formatTime, getLikeCount } from '../data';
 
 /**
  * 피드 카드 한 장.
@@ -164,7 +164,7 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
         </div>
 
         <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#1A1A1A', marginBottom: '6px' }}>
-          좋아요 {Math.max(0, post.likes || 0)}개
+          좋아요 {getLikeCount(post)}개
         </div>
         <div style={{ fontWeight: '800', fontSize: '15px', color: '#1A1A1A', lineHeight: '1.3' }}>
           {post.title || '제목 없는 여행기'}

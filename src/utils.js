@@ -39,6 +39,17 @@ export function toCoordinate(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+/**
+ * 좋아요 수 — 누른 사람 목록(likedBy)을 기준으로 센다.
+ * likes 숫자 필드는 연타·동시 클릭 때 likedBy 와 어긋날 수 있어서,
+ * 화면마다 다른 필드를 보면 같은 글의 좋아요 수가 탭마다 달라 보였다.
+ */
+export function getLikeCount(post) {
+  if (Array.isArray(post?.likedBy)) return post.likedBy.length;
+  const likes = Number(post?.likes);
+  return Number.isFinite(likes) ? Math.max(0, likes) : 0;
+}
+
 /** 지점에 쓸 수 있는 좌표가 있는지 (위치 정보 없는 사진은 lat/lng 가 null) */
 export function hasLocation(spot) {
   return toCoordinate(spot?.lat) !== null && toCoordinate(spot?.lng) !== null;

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import PostCard from '../components/PostCard';
 import {
-  collection, query, orderBy, doc, updateDoc, addDoc, deleteDoc,
+  collection, query, orderBy, limit, doc, updateDoc, addDoc,
   arrayUnion, arrayRemove, increment, onSnapshot, getDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { deleteGatheringCascade } from '../deletion';
 import {
   FALLBACK_AVATAR,
   createSocialNotification,
@@ -14,6 +15,11 @@ import {
 } from '../data';
 
 const NEARBY_RADIUS_KM = 5;
+// 게시물 전체를 실시간 구독하면 글이 늘수록 읽기 비용이 끝없이 커진다. 최신 글만 받는다.
+// (정렬·팔로잉·내 주변 필터도 이 범위 안에서 동작한다. 더 오래된 글은 발견 탭에서 페이지 단위로 본다)
+const FEED_LIMIT = 100;
+// 동행 핀에 정확한 GPS 를 그대로 공개하지 않도록 소수 셋째 자리(약 100m)로 반올림한다.
+const roundCoord = (value) => Math.round(value * 1000) / 1000;
 const DEFAULT_LOCATION = { lat: 37.5445, lng: 127.056 }; // 성수역
 
 const CATEGORIES = [
@@ -51,7 +57,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
 
   // 1. 여정 게시글 실시간 구독
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(FEED_LIMIT));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -241,8 +247,8 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
         title: newTitle.trim(),
         body: newBody.trim(),
         category: newCategory,
-        lat: myLocation.lat,
-        lng: myLocation.lng,
+        lat: roundCoord(myLocation.lat),
+        lng: roundCoord(myLocation.lng),
         maxMembers: Number(newMaxMembers),
         currentMembers: [currentUser.uid],
         status: 'recruiting',
@@ -254,7 +260,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       setNewCategory('cafe');
       setNewMaxMembers(4);
       setIsCreateModalOpen(false);
-      showToast('⚡ 내 위치에 동행 모집 핀을 올렸습니다!', 'success');
+      showToast('⚡ 내 주변에 동행 모집 핀을 올렸습니다! (정확한 위치는 공개되지 않아요)', 'success');
     } catch (error) {
       console.error('동행 글 작성 실패:', error);
       showToast('모집글 등록에 실패했습니다.', 'error');
@@ -267,7 +273,8 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
     if (!window.confirm('이 동행 모집을 취소하고 완전히 삭제하시겠습니까?')) return;
 
     try {
-      await deleteDoc(doc(db, 'gatherings', gatheringId));
+      // 문서만 지우면 동행 채팅 메시지가 남고, 부모가 사라져 규칙상 다시 지울 수도 없게 된다.
+      await deleteGatheringCascade(gatheringId);
       setSelectedGathering(null);
       showToast('동행 모집이 취소되었습니다.');
     } catch (error) {

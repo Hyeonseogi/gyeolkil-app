@@ -20,6 +20,7 @@ import {
   REGION_LABELS,
   createSocialNotification,
   extractRegionsFromRoute,
+  getLikeCount,
   getTimestampValue,
   showToast
 } from '../data';
@@ -65,11 +66,7 @@ const normalizeRoute = (route) => {
 /** 저장 형식이 조금씩 다른 게시글을 화면에서 쓰기 좋은 형태로 통일 */
 const normalizePost = (post, index = 0) => {
   const route = normalizeRoute(post?.route);
-  const likes = Array.isArray(post?.likedBy)
-    ? post.likedBy.length
-    : Number.isFinite(Number(post?.likes))
-      ? Number(post.likes)
-      : 0;
+  const likes = getLikeCount(post);
   const regions = extractRegionsFromRoute(route);
 
   return {
