@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { showToast } from '../data';
 
 const LoginScreen = () => {
-  // 1. [현석 님 로직] 로그인 진행 중 체크 (중복 클릭 방지)
+  // 로그인 진행 중 체크 (중복 클릭 방지)
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
@@ -18,38 +19,44 @@ const LoginScreen = () => {
       const user = result.user;
 
       const userDocRef = doc(db, 'users', user.uid);
-      
-      // 2. [데이터 보호 로직] 기존 유저인지 확인
+
+      // 기존 유저인지 확인 (재로그인 시 프로필을 덮어쓰지 않기 위함)
       const userDocSnap = await getDoc(userDocRef);
 
-      // 유저 정보가 없다면 (최초 가입 시에만) 동주 님 로직대로 초기 데이터 세팅
+      // 유저 정보가 없다면 최초 가입이므로 초기 데이터를 세팅
       if (!userDocSnap.exists()) {
         await setDoc(userDocRef, {
           uid: user.uid,
-          displayName: user.displayName,
+          displayName: user.displayName || '여행자',
           email: user.email,
-          photoURL: user.photoURL,
+          photoURL: user.photoURL || '',
           bio: '여행 기록을 남기는 중 ✈️',
           followers: [],
           following: [],
           likedPosts: [],
           savedPosts: [],
-          commentedPosts: []
+          commentedPosts: [],
+          createdAt: serverTimestamp()
         });
       }
-      
     } catch (error) {
-      // 3. [현석 님 로직] 사용자가 팝업을 닫은 경우 예외 처리
-      if (error.code !== 'auth/popup-closed-by-user') {
-        console.error("로그인 에러:", error);
-        alert("로그인 중 문제가 발생했습니다. 네트워크 상태를 확인해주세요.");
+      // 사용자가 팝업을 스스로 닫은 경우는 오류가 아니므로 조용히 넘어간다.
+      const silentCodes = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
+      if (!silentCodes.includes(error.code)) {
+        console.error('로그인 에러:', error);
+        const message =
+          error.code === 'auth/popup-blocked'
+            ? '브라우저가 팝업을 차단했습니다. 팝업을 허용한 뒤 다시 시도해주세요.'
+            : error.code === 'auth/unauthorized-domain'
+              ? '이 도메인은 Firebase 인증에 등록되어 있지 않습니다.'
+              : '로그인 중 문제가 발생했습니다. 네트워크 상태를 확인해주세요.';
+        showToast(message, 'error');
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 4. [동주 님 UI 디자인 + 현석 님 로딩 UX 결합]
   return (
     <div
       style={{

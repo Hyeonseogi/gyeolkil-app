@@ -2,18 +2,27 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#52B788" />
+  <meta name="description" content="곁길 — 사진 한 장으로 여행 경로를 자동 복원하고, 지금 내 주변의 동행을 찾는 여정 기록 소셜 앱" />
+
   <title>곁길 — 나의 여정을 기록하고 공유하다</title>
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Gowun+Dodum&display=swap" rel="stylesheet" />
-  
-  <!-- 폰트어썸 (아이콘) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1234abcd5678..."></script>
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_JS_KEY%"></script>
+
+  <!-- 아이콘 (Font Awesome) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- 카카오맵 SDK (키는 .env 의 VITE_KAKAO_JS_KEY 값이 빌드 시 주입됩니다) -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_JS_KEY%&libraries=services"></script>
 </head>
 <body>
   <div id="root"></div>
+  <noscript>곁길을 이용하려면 자바스크립트를 켜주세요.</noscript>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
