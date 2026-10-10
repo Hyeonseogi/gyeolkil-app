@@ -39,6 +39,11 @@ export function toCoordinate(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+/** 지점에 쓸 수 있는 좌표가 있는지 (위치 정보 없는 사진은 lat/lng 가 null) */
+export function hasLocation(spot) {
+  return toCoordinate(spot?.lat) !== null && toCoordinate(spot?.lng) !== null;
+}
+
 /** 두 좌표 사이의 거리(km) — 하버사인 공식 */
 export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   const coords = [lat1, lon1, lat2, lon2].map(toCoordinate);

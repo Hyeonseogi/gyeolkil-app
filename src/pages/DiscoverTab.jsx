@@ -364,7 +364,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {/* 인기 코스 */}
         <div className="discover-section" style={{ padding: '20px 16px', backgroundColor: '#fff' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: '0 0 16px' }}>🔥 이번 주 인기 코스</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: '0 0 16px' }}>🔥 인기 코스</h3>
 
           <div className="routes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             {isLoading && popularPosts.length === 0 ? (

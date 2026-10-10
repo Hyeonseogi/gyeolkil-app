@@ -10,6 +10,7 @@ import {
   getNotificationTypeIcon,
   getRegionFromCoords,
   getTimestampValue,
+  hasLocation,
   REGION_LABELS
 } from './utils';
 
@@ -44,6 +45,19 @@ describe('getDistanceFromLatLonInKm — 하버사인 거리', () => {
     const a = getDistanceFromLatLonInKm(37.5665, 126.978, 33.4996, 126.5312);
     const b = getDistanceFromLatLonInKm(33.4996, 126.5312, 37.5665, 126.978);
     expect(a).toBeCloseTo(b, 6);
+  });
+});
+
+describe('hasLocation — 지점 좌표 유무', () => {
+  it('위도·경도가 모두 있으면 true', () => {
+    expect(hasLocation({ lat: 37.5445, lng: 127.056 })).toBe(true);
+    expect(hasLocation({ lat: '37.5445', lng: '127.056' })).toBe(true);
+  });
+
+  it('위치 정보 없는 사진(null 좌표)은 false — 서울시청 같은 기본값으로 채우지 않는다', () => {
+    expect(hasLocation({ lat: null, lng: null })).toBe(false);
+    expect(hasLocation({ lat: 37.5, lng: undefined })).toBe(false);
+    expect(hasLocation(null)).toBe(false);
   });
 });
 

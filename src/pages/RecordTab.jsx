@@ -2,25 +2,17 @@ import { Fragment, useState, useRef, useEffect, useCallback } from 'react';
 import exifr from 'exifr';
 import heic2any from 'heic2any';
 import RouteMap from '../components/RouteMap';
+import LocationPicker from '../components/LocationPicker';
 import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import imageCompression from 'browser-image-compression';
-import { extractRegionsFromRoute, getDistanceFromLatLonInKm, showToast } from '../data';
+import { extractRegionsFromRoute, getDistanceFromLatLonInKm, hasLocation, showToast } from '../data';
+import { deleteDraft, listDrafts, putDraft } from '../draftStore';
 
-const DRAFTS_KEY = 'gyeolkil_drafts';
-const DEFAULT_COORDS = { lat: 37.5665, lng: 126.978 }; // 위치 정보를 못 찾았을 때(서울시청)
 const CLUSTER_RADIUS_KM = 0.08; // 80m 이내면 같은 장소로 묶는다
 const WALK_THRESHOLD_KM = 3; // 이보다 가까우면 도보 경로로 계산
-
-const readDrafts = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
+const DEFAULT_SPOT_NAME = /^장소 \d+$/;
 
 /**
  * 두 지점 사이의 실제 경로를 가져온다.
@@ -69,8 +61,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
   const [tags, setTags] = useState('');
   const [spots, setSpots] = useState([]);
 
-  // localStorage 읽기는 최초 렌더 때 한 번만 하면 되므로 초기값으로 넣는다.
-  const [drafts, setDrafts] = useState(readDrafts);
+  const [drafts, setDrafts] = useState([]);
+  // 지금 편집 중인 임시저장 — 다시 저장하면 새로 쌓지 않고 덮어쓴다.
+  const [currentDraftId, setCurrentDraftId] = useState(null);
+  // 장소 지정 창을 띄운 지점의 인덱스 (null 이면 닫힘)
+  const [locatingIndex, setLocatingIndex] = useState(null);
   const [showDraftsPanel, setShowDraftsPanel] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -97,34 +92,47 @@ const RecordTab = ({ currentUser, onPublish }) => {
     return url;
   }, []);
 
-  const handleSaveDraft = () => {
+  useEffect(() => {
+    let cancelled = false;
+    listDrafts()
+      .then((list) => {
+        if (!cancelled) setDrafts(list);
+      })
+      .catch((error) => console.warn('임시저장 목록을 불러오지 못했습니다:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveDraft = async () => {
     if (!title.trim() && spots.length === 0) {
       showToast('저장할 내용이 없습니다.', 'error');
       return;
     }
 
-    // File 객체는 JSON 으로 저장할 수 없으므로 제외한다.
-    const draftSpots = spots.map(({ file, photo, ...rest }) => rest);
-    const newDraft = {
-      id: `draft_${Date.now()}`,
-      title,
-      body,
-      companion,
-      tags,
-      spots: draftSpots,
-      savedAt: Date.now()
-    };
+    // 사진(File)은 IndexedDB 에 그대로 저장하고, 미리보기용 blob: 주소는 불러올 때 다시 만든다.
+    const draftSpots = spots.map(({ photo, ...rest }) => rest);
+    const id = currentDraftId || `draft_${Date.now()}`;
 
-    const next = [newDraft, ...readDrafts()].slice(0, 20);
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
-    setDrafts(next);
-    showToast('작성 중인 내용을 기기에 임시저장했습니다. 💾', 'success');
+    try {
+      const next = await putDraft({ id, title, body, companion, tags, spots: draftSpots, savedAt: Date.now() });
+      setDrafts(next);
+      setCurrentDraftId(id);
+      showToast('사진까지 함께 기기에 임시저장했습니다. 💾', 'success');
+    } catch (error) {
+      console.error('임시저장 실패:', error);
+      showToast('임시저장에 실패했습니다. 기기 저장 공간을 확인해주세요.', 'error');
+    }
   };
 
-  const handleDeleteDraft = (draftId) => {
-    const next = readDrafts().filter((d) => d.id !== draftId);
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
-    setDrafts(next);
+  const handleDeleteDraft = async (draftId) => {
+    try {
+      setDrafts(await deleteDraft(draftId));
+      if (draftId === currentDraftId) setCurrentDraftId(null);
+    } catch (error) {
+      console.error('임시저장 삭제 실패:', error);
+      showToast('임시저장을 삭제하지 못했습니다.', 'error');
+    }
   };
 
   const handleCameraUpload = (e) => {
@@ -139,6 +147,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
           name: `장소 ${prev.length + 1}`,
           lat,
           lng,
+          hasGps: lat !== null,
           photo: createPreviewUrl(file),
           file,
           color: '#52B788',
@@ -148,18 +157,21 @@ const RecordTab = ({ currentUser, onPublish }) => {
       setStep(2);
     };
 
+    // 위치를 못 찾으면 기본 좌표로 채우지 않고 비워 둔다. 사용자가 직접 장소를 고른다.
+    const addSpotWithoutLocation = () => {
+      showToast('위치를 찾지 못했어요. "위치 지정"을 눌러 장소를 골라주세요.', 'error');
+      addSpot(null, null);
+    };
+
     if (!navigator.geolocation) {
-      addSpot(DEFAULT_COORDS.lat, DEFAULT_COORDS.lng);
+      addSpotWithoutLocation();
       return;
     }
 
     showToast('현재 위치를 찾고 있습니다... 📡');
     navigator.geolocation.getCurrentPosition(
       (position) => addSpot(position.coords.latitude, position.coords.longitude),
-      () => {
-        showToast('위치를 찾지 못해 기본 좌표로 저장합니다.', 'error');
-        addSpot(DEFAULT_COORDS.lat, DEFAULT_COORDS.lng);
-      },
+      addSpotWithoutLocation,
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   };
@@ -185,22 +197,23 @@ const RecordTab = ({ currentUser, onPublish }) => {
         }
 
         // EXIF 에서 촬영 위치·시각을 뽑아 경로를 자동 복원한다.
+        // 위치 정보가 없으면 null 로 두고, 2단계에서 사용자가 장소를 직접 지정한다.
         const exifData = await exifr.parse(file);
+        const gps = { lat: exifData?.latitude ?? null, lng: exifData?.longitude ?? null };
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
-          lat: exifData?.latitude ?? DEFAULT_COORDS.lat,
-          lng: exifData?.longitude ?? DEFAULT_COORDS.lng,
-          hasGps: Boolean(exifData?.latitude && exifData?.longitude),
+          ...gps,
+          hasGps: hasLocation(gps),
           photo: createPreviewUrl(file),
           file,
           timestamp: exifData?.DateTimeOriginal ? new Date(exifData.DateTimeOriginal).getTime() : file.lastModified
         });
       } catch (error) {
-        console.warn('EXIF 분석 실패, 기본값으로 대체:', error);
+        console.warn('EXIF 분석 실패, 위치는 직접 지정받음:', error);
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
-          lat: DEFAULT_COORDS.lat,
-          lng: DEFAULT_COORDS.lng,
+          lat: null,
+          lng: null,
           hasGps: false,
           photo: createPreviewUrl(file),
           file,
@@ -213,6 +226,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
     const allSpots = [...spots, ...newSpots].sort((a, b) => a.timestamp - b.timestamp);
 
     // 가까운 좌표는 같은 장소로 묶어 지도에 핀이 중복으로 찍히지 않게 한다.
+    // (좌표가 없는 지점은 거리가 Infinity 라 묶이지 않는다)
     for (let i = 1; i < allSpots.length; i += 1) {
       const d = getDistanceFromLatLonInKm(allSpots[i - 1].lat, allSpots[i - 1].lng, allSpots[i].lat, allSpots[i].lng);
       if (d < CLUSTER_RADIUS_KM) {
@@ -221,25 +235,52 @@ const RecordTab = ({ currentUser, onPublish }) => {
       }
     }
 
-    setSpots(allSpots.map((s, idx) => ({ ...s, name: s.name.startsWith('장소') ? `장소 ${idx + 1}` : s.name })));
+    setSpots(allSpots.map((s, idx) => ({ ...s, name: DEFAULT_SPOT_NAME.test(s.name) ? `장소 ${idx + 1}` : s.name })));
     setStep(2);
     setIsAnalyzing(false);
     setProgress('');
 
     const noGpsCount = newSpots.filter((s) => !s.hasGps).length;
     if (noGpsCount > 0) {
-      showToast(`${noGpsCount}장은 위치 정보가 없어 기본 좌표로 표시됩니다.`, 'error');
+      showToast(`${noGpsCount}장은 위치 정보가 없어요. "위치 지정"을 눌러 장소를 골라주세요.`, 'error');
     }
   };
 
   const handleRemoveSpot = (indexToRemove) => setSpots(spots.filter((_, idx) => idx !== indexToRemove));
 
+  const handleSetLocation = ({ lat, lng, name }) => {
+    setSpots((prev) =>
+      prev.map((spot, idx) => {
+        if (idx !== locatingIndex) return spot;
+        // 이름을 아직 안 바꿨다면 검색한 장소 이름으로 채워 준다.
+        const keepName = spot.name && !DEFAULT_SPOT_NAME.test(spot.name);
+        return { ...spot, lat, lng, locationSource: 'manual', name: keepName || !name ? spot.name : name };
+      })
+    );
+    setLocatingIndex(null);
+    showToast('장소를 지정했습니다. 📍', 'success');
+  };
+
+  const missingLocationCount = spots.filter((spot) => !hasLocation(spot)).length;
+
+  const handleGoToWriteStep = () => {
+    if (missingLocationCount > 0) {
+      showToast(`위치가 없는 사진 ${missingLocationCount}장의 장소를 먼저 지정해주세요.`, 'error');
+      return;
+    }
+    setStep(3);
+  };
+
   const handleLoadDraft = (draft) => {
-    setSpots(draft.spots || []);
+    // 저장해 둔 사진 파일로 미리보기 주소를 다시 만든다.
+    setSpots(
+      (draft.spots || []).map((spot) => ({ ...spot, photo: spot.file ? createPreviewUrl(spot.file) : spot.photo }))
+    );
     setTitle(draft.title || '');
     setBody(draft.body || '');
     setCompanion(draft.companion || '');
     setTags(draft.tags || '');
+    setCurrentDraftId(draft.id);
     setShowDraftsPanel(false);
     setStep(2);
   };
@@ -267,6 +308,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
     }
     if (spots.length === 0) {
       showToast('사진을 최소 1장 이상 추가해주세요.', 'error');
+      return;
+    }
+    if (missingLocationCount > 0) {
+      showToast(`위치가 없는 사진 ${missingLocationCount}장의 장소를 먼저 지정해주세요.`, 'error');
+      setStep(2);
       return;
     }
     if (!currentUser) {
@@ -371,6 +417,13 @@ const RecordTab = ({ currentUser, onPublish }) => {
       setCompanion('');
       setTags('');
       setSpots([]);
+      // 게시가 끝난 임시저장은 목록에서 지운다.
+      if (currentDraftId) {
+        deleteDraft(currentDraftId)
+          .then(setDrafts)
+          .catch((error) => console.warn('게시한 임시저장 정리 실패:', error));
+        setCurrentDraftId(null);
+      }
       if (onPublish) onPublish();
     } catch (error) {
       console.error('게시 오류:', error);
@@ -491,7 +544,18 @@ const RecordTab = ({ currentUser, onPublish }) => {
                   {spots.map((spot, i) => {
                     let routeConnectionUI = null;
 
-                    if (i < spots.length - 1) {
+                    if (i < spots.length - 1 && (!hasLocation(spot) || !hasLocation(spots[i + 1]))) {
+                      // 좌표가 없으면 거리·이동시간을 계산할 수 없다.
+                      routeConnectionUI = (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0 8px' }}>
+                          <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
+                          <div style={{ fontSize: '12px', color: '#868E96', padding: '6px 12px' }}>
+                            장소를 지정하면 이동 시간이 계산돼요
+                          </div>
+                          <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
+                        </div>
+                      );
+                    } else if (i < spots.length - 1) {
                       const nextSpot = spots[i + 1];
                       const distKm = getDistanceFromLatLonInKm(spot.lat, spot.lng, nextSpot.lat, nextSpot.lng);
                       const timeDiffMins = Math.round(Math.abs(nextSpot.timestamp - spot.timestamp) / 60000);
@@ -580,10 +644,36 @@ const RecordTab = ({ currentUser, onPublish }) => {
                                 borderBottom: '1px dashed #ccc'
                               }}
                             />
-                            <div className="spot-coords" style={{ fontSize: '11px', color: '#868E96', marginTop: '4px' }}>
-                              📍 {spot.lat?.toFixed(4)}, {spot.lng?.toFixed(4)}
-                              {spot.hasGps === false && <span style={{ color: '#e8590c' }}> · 위치 정보 없음</span>}
-                            </div>
+                            {hasLocation(spot) ? (
+                              <div className="spot-coords" style={{ fontSize: '11px', color: '#868E96', marginTop: '4px' }}>
+                                📍 {Number(spot.lat).toFixed(4)}, {Number(spot.lng).toFixed(4)}
+                                {spot.locationSource === 'manual' && ' · 직접 지정'}
+                                <button
+                                  onClick={() => setLocatingIndex(i)}
+                                  aria-label={`${i + 1}번째 장소 위치 변경`}
+                                  style={{ marginLeft: '6px', background: 'none', border: 'none', padding: 0, color: '#52B788', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  변경
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setLocatingIndex(i)}
+                                style={{
+                                  marginTop: '6px',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  border: 'none',
+                                  background: '#FFF4E6',
+                                  color: '#E8590C',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                📍 위치 정보 없음 · 위치 지정하기
+                              </button>
+                            )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
                             <button
@@ -628,10 +718,15 @@ const RecordTab = ({ currentUser, onPublish }) => {
                   >
                     💾 임시저장
                   </button>
-                  <button className="step-next-btn" onClick={() => setStep(3)} disabled={spots.length === 0}>
+                  <button className="step-next-btn" onClick={handleGoToWriteStep} disabled={spots.length === 0}>
                     다음
                   </button>
                 </div>
+                {missingLocationCount > 0 && (
+                  <p style={{ margin: '-12px 0 16px', fontSize: '12px', color: '#E8590C', textAlign: 'center' }}>
+                    위치가 없는 사진 {missingLocationCount}장의 장소를 지정해야 다음으로 넘어갈 수 있어요.
+                  </p>
+                )}
               </div>
             )}
 
@@ -699,6 +794,14 @@ const RecordTab = ({ currentUser, onPublish }) => {
           </>
         )}
       </div>
+
+      {locatingIndex !== null && spots[locatingIndex] && (
+        <LocationPicker
+          initialKeyword={DEFAULT_SPOT_NAME.test(spots[locatingIndex].name) ? '' : spots[locatingIndex].name}
+          onSelect={handleSetLocation}
+          onClose={() => setLocatingIndex(null)}
+        />
+      )}
     </section>
   );
 };
