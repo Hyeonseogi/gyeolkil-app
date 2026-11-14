@@ -18,50 +18,17 @@ import {
   showToast
 } from '../data';
 import { reverseGeocode, reverseGeocodeAll } from '../geocode';
+import {
+  estimateTravelMinutes,
+  isWalkableDistance,
+  loadRoute,
+  peekRoute,
+  resolveTransitMode
+} from '../routing';
 import { deleteDraft, listDrafts, putDraft } from '../draftStore';
 
 const CLUSTER_RADIUS_KM = 0.08; // 80m 이내면 같은 장소로 묶는다
-const WALK_THRESHOLD_KM = 3; // 이보다 가까우면 도보 경로로 계산
 const DEFAULT_SPOT_NAME = /^장소 \d+$/;
-
-/**
- * 두 지점 사이의 실제 경로를 가져온다.
- * API 키는 브라우저에 두지 않고 개발 서버의 /api/route/* 프록시가 주입한다.
- * (정적 배포처럼 프록시가 없는 환경에서는 null 을 돌려주고 직선으로 대체된다.)
- */
-const fetchRouteBetween = async (start, end) => {
-  const distKm = getDistanceFromLatLonInKm(start.lat, start.lng, end.lat, end.lng);
-  const preferWalk = start.transitType ? start.transitType === 'walk' : distKm < WALK_THRESHOLD_KM;
-
-  try {
-    if (preferWalk) {
-      const res = await fetch('/api/route/pedestrian', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startX: start.lng,
-          startY: start.lat,
-          endX: end.lng,
-          endY: end.lat,
-          reqCoordType: 'WGS84GEO',
-          resCoordType: 'WGS84GEO',
-          startName: '출발',
-          endName: '도착'
-        })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data?.features ? { type: 'walk', data } : null;
-    }
-
-    const res = await fetch(`/api/route/car?origin=${start.lng},${start.lat}&destination=${end.lng},${end.lat}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.routes?.[0]?.sections ? { type: 'car', data } : null;
-  } catch {
-    return null;
-  }
-};
 
 const RecordTab = ({ currentUser, onPublish }) => {
   const [step, setStep] = useState(1);
@@ -166,6 +133,32 @@ const RecordTab = ({ currentUser, onPublish }) => {
       })
     );
   }, []);
+
+  // 2단계에서 구간별 실제 이동 시간을 미리 불러온다.
+  // 결과는 routing 모듈이 기억하고(게시할 때 다시 쓴다), 여기서는 도착했다는 것만 알려 화면을 다시 그린다.
+  const [, setRouteTick] = useState(0);
+  useEffect(() => {
+    if (step !== 2) return undefined;
+
+    let cancelled = false;
+    for (let i = 0; i < spots.length - 1; i += 1) {
+      const start = spots[i];
+      const end = spots[i + 1];
+      if (!hasLocation(start) || !hasLocation(end)) continue;
+      if (start.lat === end.lat && start.lng === end.lng) continue; // 같은 장소 — 이동 없음
+
+      const mode = resolveTransitMode(start, end);
+      if (peekRoute(start, end, mode) !== undefined) continue; // 이미 받았거나 실패가 확인된 구간
+
+      loadRoute(start, end, mode).then(() => {
+        if (!cancelled) setRouteTick((n) => n + 1);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spots, step]);
 
   const handleCameraUpload = (e) => {
     const file = e.target.files?.[0];
@@ -434,35 +427,20 @@ const RecordTab = ({ currentUser, onPublish }) => {
           continue;
         }
 
-        const result = await fetchRouteBetween(start, end);
+        // 2단계 화면에 보였던 이동수단 그대로 저장한다.
+        const mode = resolveTransitMode(start, end);
+        spotsForDB[i].transitType = mode;
 
-        if (result?.type === 'walk') {
-          spotsForDB[i].travelTimeToNext = Math.ceil((result.data.features[0]?.properties?.totalTime || 0) / 60);
-          spotsForDB[i].transitType = 'walk';
-          result.data.features.forEach((feature) => {
-            if (feature.geometry.type === 'LineString') {
-              feature.geometry.coordinates.forEach((coord) => detailedPath.push({ lng: coord[0], lat: coord[1] }));
-            } else if (feature.geometry.type === 'Point') {
-              detailedPath.push({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
-            }
-          });
-        } else if (result?.type === 'car') {
-          spotsForDB[i].travelTimeToNext = Math.ceil((result.data.routes[0].summary?.duration || 0) / 60);
-          spotsForDB[i].transitType = 'car';
-          result.data.routes[0].sections.forEach((section) => {
-            section?.roads?.forEach((road) => {
-              const vertexes = road.vertexes || [];
-              for (let j = 0; j < vertexes.length; j += 2) {
-                detailedPath.push({ lng: vertexes[j], lat: vertexes[j + 1] });
-              }
-            });
-          });
+        // 2단계에서 미리 불러 둔 결과가 있으면 그대로 쓴다. 그때 실패했던 구간은 한 번 더 시도한다.
+        const result = await loadRoute(start, end, mode, { retryFailed: true });
+
+        if (result) {
+          spotsForDB[i].travelTimeToNext = result.minutes;
+          result.path.forEach((point) => detailedPath.push(point));
         } else {
-          // 경로 API 를 쓸 수 없으면 두 점을 직선으로 잇는다.
+          // 경로 API 를 쓸 수 없으면 예상 시간을 쓰고 두 점을 직선으로 잇는다.
           const distKm = getDistanceFromLatLonInKm(start.lat, start.lng, end.lat, end.lng);
-          const isCar = start.transitType ? start.transitType === 'car' : distKm >= WALK_THRESHOLD_KM;
-          spotsForDB[i].transitType = isCar ? 'car' : 'walk';
-          spotsForDB[i].travelTimeToNext = Math.max(1, Math.ceil((distKm / (isCar ? 40 : 4)) * 60));
+          spotsForDB[i].travelTimeToNext = estimateTravelMinutes(distKm, mode);
           detailedPath.push({ lat: start.lat, lng: start.lng }, { lat: end.lat, lng: end.lng });
         }
       }
@@ -651,19 +629,21 @@ const RecordTab = ({ currentUser, onPublish }) => {
                     } else if (i < spots.length - 1) {
                       const nextSpot = spots[i + 1];
                       const distKm = getDistanceFromLatLonInKm(spot.lat, spot.lng, nextSpot.lat, nextSpot.lng);
-                      const timeDiffMins = Math.round(Math.abs(nextSpot.timestamp - spot.timestamp) / 60000);
 
-                      // 사용자가 직접 고른 이동수단이 있으면 그것을 우선한다.
-                      const speedKmH = distKm / (timeDiffMins / 60 || 1);
-                      const guessedType = speedKmH > 10 || distKm > WALK_THRESHOLD_KM ? 'car' : 'walk';
-                      const transitType = spot.transitType || guessedType;
+                      // 화면에 보이는 이 값이 그대로 저장된다. (게시할 때도 같은 함수로 정한다)
+                      const transitType = resolveTransitMode(spot, nextSpot);
 
-                      const estTravelTime = Math.max(
-                        1,
-                        Math.ceil((distKm / (transitType === 'car' ? 40 : 4)) * 60)
-                      );
+                      // 선택된 이동수단은 실제 경로 탐색 결과를 쓰고, 아직 못 받았거나 실패했으면 예상치를 쓴다.
+                      const route = peekRoute(spot, nextSpot, transitType);
+                      const travelMinutes = route ? route.minutes : estimateTravelMinutes(distKm, transitType);
+                      const travelLabel = (mode) => {
+                        if (mode === transitType && route) return formatDuration(route.minutes);
+                        if (mode === 'walk' && !isWalkableDistance(distKm)) return `직선 ${Math.round(distKm)}km`;
+                        return `예상 ${formatDuration(estimateTravelMinutes(distKm, mode))}`;
+                      };
+
                       // 다음 사진이 다른 날이면 null — 밤을 "머무름"으로 세지 않는다.
-                      const stayTime = getStayMinutes(spot, nextSpot, estTravelTime);
+                      const stayTime = getStayMinutes(spot, nextSpot, travelMinutes);
 
                       routeConnectionUI = (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0 8px' }}>
@@ -690,8 +670,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
                               }}
                               style={{ border: 'none', background: 'transparent', fontWeight: 'bold', color: '#52B788', outline: 'none', cursor: 'pointer' }}
                             >
-                              <option value="walk">🚶 도보 (예상 {formatDuration(Math.ceil((distKm / 4) * 60))})</option>
-                              <option value="car">🚗 차/대중교통 (예상 {formatDuration(Math.max(1, Math.ceil((distKm / 40) * 60)))})</option>
+                              <option value="walk">🚶 도보 ({travelLabel('walk')})</option>
+                              <option value="car">🚗 차량 ({travelLabel('car')})</option>
                             </select>
                             <span style={{ color: '#ccc' }}>|</span>
                             <span style={{ color: 'var(--text-sub, #868E96)' }}>
@@ -699,6 +679,9 @@ const RecordTab = ({ currentUser, onPublish }) => {
                                 '🕒 촬영 시각 없음'
                               ) : stayTime === null ? (
                                 '🌙 다음 날로 이어짐'
+                              ) : stayTime === 0 ? (
+                                // 사진 간격이 이동 시간보다 짧다 — 머문 시간 없이 곧장 다음 장소로 간 것
+                                '➡️ 바로 이동'
                               ) : (
                                 <>
                                   ☕ <strong>약 {formatDuration(stayTime)}</strong> 머무름
