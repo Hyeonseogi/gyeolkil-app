@@ -12,9 +12,12 @@ import {
   formatDuration,
   getDistanceFromLatLonInKm,
   getStayMinutes,
+  groupRouteByPlace,
   hasLocation,
+  isDefaultPlaceName,
   showToast
 } from '../data';
+import { reverseGeocode, reverseGeocodeAll } from '../geocode';
 import { deleteDraft, listDrafts, putDraft } from '../draftStore';
 
 const CLUSTER_RADIUS_KM = 0.08; // 80m 이내면 같은 장소로 묶는다
@@ -142,6 +145,28 @@ const RecordTab = ({ currentUser, onPublish }) => {
     }
   };
 
+  /**
+   * 좌표로 장소 이름과 시도를 찾아 한 지점에 채운다. (사진 파일로 지점을 식별한다)
+   * 사용자가 이름을 직접 붙였으면 이름은 건드리지 않고 시도만 채운다.
+   */
+  const fillPlaceInfo = useCallback(async (file, lat, lng) => {
+    const info = await reverseGeocode(lat, lng);
+    if (!info) return;
+
+    setSpots((prev) =>
+      prev.map((spot) => {
+        // 조회하는 사이에 위치를 다시 바꿨다면 늦게 온 결과는 버린다.
+        if (spot.file !== file || spot.lat !== lat || spot.lng !== lng) return spot;
+        const canRename = info.name && (isDefaultPlaceName(spot.name) || spot.autoNamed);
+        return {
+          ...spot,
+          sido: info.sido,
+          ...(canRename ? { name: info.name, autoNamed: true } : {})
+        };
+      })
+    );
+  }, []);
+
   const handleCameraUpload = (e) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // 같은 파일을 다시 골라도 인식되도록 초기화
@@ -162,6 +187,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
         }
       ]);
       setStep(2);
+      if (lat !== null) fillPlaceInfo(file, lat, lng);
     };
 
     // 위치를 못 찾으면 기본 좌표로 채우지 않고 비워 둔다. 사용자가 직접 장소를 고른다.
@@ -207,13 +233,18 @@ const RecordTab = ({ currentUser, onPublish }) => {
         // 위치 정보가 없으면 null 로 두고, 2단계에서 사용자가 장소를 직접 지정한다.
         const exifData = await exifr.parse(file);
         const gps = { lat: exifData?.latitude ?? null, lng: exifData?.longitude ?? null };
+        const shotAt = exifData?.DateTimeOriginal ? new Date(exifData.DateTimeOriginal).getTime() : NaN;
+        const hasShotTime = Number.isFinite(shotAt);
         newSpots.push({
           name: `장소 ${spots.length + i + 1}`,
           ...gps,
           hasGps: hasLocation(gps),
           photo: createPreviewUrl(file),
           file,
-          timestamp: exifData?.DateTimeOriginal ? new Date(exifData.DateTimeOriginal).getTime() : file.lastModified
+          // 촬영 시각이 없으면 파일 날짜로 순서만 잡고, 추정값임을 표시해 둔다.
+          // (메신저로 받은 사진은 파일 날짜가 내려받은 날이라 여행 날짜로 쓸 수 없다)
+          timestamp: hasShotTime ? shotAt : file.lastModified,
+          ...(hasShotTime ? {} : { timeEstimated: true })
         });
       } catch (error) {
         console.warn('EXIF 분석 실패, 위치는 직접 지정받음:', error);
@@ -224,7 +255,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
           hasGps: false,
           photo: createPreviewUrl(file),
           file,
-          timestamp: file.lastModified
+          timestamp: file.lastModified,
+          timeEstimated: true
         });
       }
     }
@@ -242,33 +274,68 @@ const RecordTab = ({ currentUser, onPublish }) => {
       }
     }
 
-    setSpots(allSpots.map((s, idx) => ({ ...s, name: DEFAULT_SPOT_NAME.test(s.name) ? `장소 ${idx + 1}` : s.name })));
+    // 좌표로 장소 이름과 시도를 찾아 채운다. 못 찾으면 "장소 n" 그대로 둔다.
+    setProgress('장소 이름을 찾는 중...');
+    const placeInfo = await reverseGeocodeAll(allSpots);
+    const namedSpots = allSpots.map((spot, idx) => {
+      const numbered = DEFAULT_SPOT_NAME.test(spot.name) ? { ...spot, name: `장소 ${idx + 1}` } : spot;
+      const info = placeInfo[idx];
+      if (!info) return numbered;
+      const canRename = info.name && (isDefaultPlaceName(numbered.name) || numbered.autoNamed);
+      return { ...numbered, sido: info.sido, ...(canRename ? { name: info.name, autoNamed: true } : {}) };
+    });
+
+    setSpots(namedSpots);
     setStep(2);
     setIsAnalyzing(false);
     setProgress('');
 
     const noGpsCount = newSpots.filter((s) => !s.hasGps).length;
-    if (noGpsCount > 0) {
-      showToast(`${noGpsCount}장은 위치 정보가 없어요. "위치 지정"을 눌러 장소를 골라주세요.`, 'error');
-    }
+    const noTimeCount = newSpots.filter((s) => s.timeEstimated).length;
+    const notices = [];
+    if (noGpsCount > 0) notices.push(`${noGpsCount}장은 위치 정보가 없어요. "위치 지정"을 눌러 장소를 골라주세요.`);
+    if (noTimeCount > 0) notices.push(`${noTimeCount}장은 촬영 시각이 없어 순서가 다를 수 있어요. 끌어서 바로잡아 주세요.`);
+    if (notices.length > 0) showToast(notices.join(' '), 'error');
   };
 
   const handleRemoveSpot = (indexToRemove) => setSpots(spots.filter((_, idx) => idx !== indexToRemove));
 
   const handleSetLocation = ({ lat, lng, name }) => {
+    const target = spots[locatingIndex];
     setSpots((prev) =>
       prev.map((spot, idx) => {
         if (idx !== locatingIndex) return spot;
-        // 이름을 아직 안 바꿨다면 검색한 장소 이름으로 채워 준다.
-        const keepName = spot.name && !DEFAULT_SPOT_NAME.test(spot.name);
-        return { ...spot, lat, lng, locationSource: 'manual', name: keepName || !name ? spot.name : name };
+        // 이름을 직접 붙인 적이 없다면(기본 이름이거나 자동으로 채운 이름) 검색한 장소 이름으로 바꿔 준다.
+        const keepName = spot.name && !DEFAULT_SPOT_NAME.test(spot.name) && !spot.autoNamed;
+        const useSearchName = !keepName && Boolean(name);
+        return {
+          ...spot,
+          lat,
+          lng,
+          locationSource: 'manual',
+          // 예전 위치의 시도가 남지 않게 비운다. (Firestore 는 undefined 를 못 받으므로 null)
+          sido: null,
+          name: useSearchName ? name : spot.name,
+          // 검색 결과에서 고른 이름은 사용자가 고른 것이므로 주소 변환이 덮어쓰지 않게 한다.
+          ...(useSearchName ? { autoNamed: false } : {})
+        };
       })
     );
     setLocatingIndex(null);
     showToast('장소를 지정했습니다. 📍', 'success');
+    // 시도는 항상 새로 찾고, 이름은 아직 정해지지 않았을 때만 채운다.
+    if (target?.file) fillPlaceInfo(target.file, lat, lng);
   };
 
   const missingLocationCount = spots.filter((spot) => !hasLocation(spot)).length;
+
+  // 사진마다 "몇 번째 장소"인지 — 같은 장소로 묶인 사진은 같은 번호를 받는다. (지도 핀 번호와 맞춘다)
+  const placeNumbers = [];
+  groupRouteByPlace(spots).forEach((place, placeIdx) => {
+    place.indexes.forEach((spotIdx) => {
+      placeNumbers[spotIdx] = placeIdx + 1;
+    });
+  });
 
   const handleGoToWriteStep = () => {
     if (missingLocationCount > 0) {
@@ -349,7 +416,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
       );
 
       // File 객체는 Firestore 에 저장할 수 없으므로 제거
-      const spotsForDB = uploadedSpots.map(({ file, ...rest }) => rest);
+      // (autoNamed 는 편집 화면에서만 쓰는 표시라 저장하지 않는다)
+      const spotsForDB = uploadedSpots.map(({ file, autoNamed, ...rest }) => rest);
 
       // 2. 지점 사이의 실제 이동 경로 복원 (실패하면 직선으로 대체)
       setProgress('이동 경로를 그리는 중...');
@@ -358,6 +426,13 @@ const RecordTab = ({ currentUser, onPublish }) => {
       for (let i = 0; i < spotsForDB.length - 1; i += 1) {
         const start = spotsForDB[i];
         const end = spotsForDB[i + 1];
+
+        // 같은 장소에서 찍은 사진 사이는 이동이 없으므로 경로 API 를 부르지 않는다.
+        if (start.lat === end.lat && start.lng === end.lng) {
+          spotsForDB[i].travelTimeToNext = 0;
+          spotsForDB[i].transitType = 'walk';
+          continue;
+        }
 
         const result = await fetchRouteBetween(start, end);
 
@@ -562,6 +637,17 @@ const RecordTab = ({ currentUser, onPublish }) => {
                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
                         </div>
                       );
+                    } else if (i < spots.length - 1 && placeNumbers[i] === placeNumbers[i + 1]) {
+                      // 같은 장소로 묶인 사진 사이에는 이동이 없다.
+                      routeConnectionUI = (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px 0 6px' }}>
+                          <div style={{ width: '2px', height: '10px', background: '#D8F3DC' }}></div>
+                          <div style={{ fontSize: '11px', color: '#2D6A4F', fontWeight: 700, padding: '2px 10px' }}>
+                            📷 같은 장소
+                          </div>
+                          <div style={{ width: '2px', height: '10px', background: '#D8F3DC' }}></div>
+                        </div>
+                      );
                     } else if (i < spots.length - 1) {
                       const nextSpot = spots[i + 1];
                       const distKm = getDistanceFromLatLonInKm(spot.lat, spot.lng, nextSpot.lat, nextSpot.lng);
@@ -609,7 +695,9 @@ const RecordTab = ({ currentUser, onPublish }) => {
                             </select>
                             <span style={{ color: '#ccc' }}>|</span>
                             <span style={{ color: 'var(--text-sub, #868E96)' }}>
-                              {stayTime === null ? (
+                              {spot.timeEstimated || nextSpot.timeEstimated ? (
+                                '🕒 촬영 시각 없음'
+                              ) : stayTime === null ? (
                                 '🌙 다음 날로 이어짐'
                               ) : (
                                 <>
@@ -634,7 +722,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
                           onDragOver={(e) => e.preventDefault()}
                           style={{ cursor: 'grab', display: 'flex', alignItems: 'center', backgroundColor: '#fff' }}
                         >
-                          <div className="spot-num">{i + 1}</div>
+                          <div className="spot-num">{placeNumbers[i]}</div>
                           <img src={spot.photo} alt="" className="spot-thumb" />
                           <div className="spot-info" style={{ flex: 1, minWidth: 0 }}>
                             <input
@@ -644,7 +732,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
                               placeholder="이곳의 이름을 적어주세요"
                               onChange={(e) => {
                                 const updated = [...spots];
-                                updated[i] = { ...updated[i], name: e.target.value };
+                                // 직접 고친 이름은 주소 변환이 다시 덮어쓰지 않는다.
+                                updated[i] = { ...updated[i], name: e.target.value, autoNamed: false };
                                 setSpots(updated);
                               }}
                               style={{
@@ -687,6 +776,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
                               >
                                 📍 위치 정보 없음 · 위치 지정하기
                               </button>
+                            )}
+                            {spot.timeEstimated && (
+                              <div style={{ fontSize: '11px', color: '#E8590C', marginTop: '4px' }}>
+                                🕒 촬영 시각 정보 없음 · 순서가 다르면 끌어서 옮겨주세요
+                              </div>
                             )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>

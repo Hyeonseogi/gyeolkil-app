@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import PostGrid from '../components/PostGrid';
-import { FALLBACK_AVATAR, getTimestampValue } from '../data';
+import { FALLBACK_AVATAR, countPlaces, getTimestampValue } from '../data';
 
 const TABS = [
   { key: 'posts', icon: 'fas fa-th', label: '내 여정' },
@@ -79,7 +79,7 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
 
   // 총 방문 장소 수 (발자취 진입 버튼에 노출)
   const totalPlaces = useMemo(
-    () => myPosts.reduce((sum, post) => sum + (post.route?.length || 0), 0),
+    () => myPosts.reduce((sum, post) => sum + countPlaces(post.route), 0),
     [myPosts]
   );
 

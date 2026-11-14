@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, collection, query, where, onSnapshot, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import PostGrid from '../components/PostGrid';
-import { FALLBACK_AVATAR, createSocialNotification, getTimestampValue, showToast } from '../data';
+import { FALLBACK_AVATAR, countPlaces, createSocialNotification, getTimestampValue, showToast } from '../data';
 
 const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
   const [userData, setUserData] = useState(null);
@@ -86,7 +86,7 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
 
   // 총 방문 장소 계산 (발자취)
   const totalPlaces = useMemo(
-    () => posts.reduce((sum, post) => sum + (post.route?.length || 0), 0),
+    () => posts.reduce((sum, post) => sum + countPlaces(post.route), 0),
     [posts]
   );
 

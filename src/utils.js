@@ -14,17 +14,104 @@ export const REGION_LABELS = {
   busan: '부산',
   jeju: '제주',
   jeonju: '전주',
-  gyeongju: '경주'
+  gyeongju: '경주',
+  incheon: '인천',
+  daejeon: '대전',
+  daegu: '대구',
+  gwangju: '광주',
+  ulsan: '울산',
+  sejong: '세종',
+  gyeonggi: '경기',
+  gangwon: '강원',
+  chungbuk: '충북',
+  chungnam: '충남',
+  jeonbuk: '전북',
+  jeonnam: '전남',
+  gyeongbuk: '경북',
+  gyeongnam: '경남'
 };
 
-// 지역 판별용 대략적인 위경도 범위
+/** 발견 탭에 항상 보여 줄 대표 여행지. 나머지 지역은 글이 있을 때만 버튼이 생긴다. */
+export const FEATURED_REGION_KEYS = ['seoul', 'busan', 'jeju', 'jeonju', 'gyeongju'];
+
+// 지역 판별용 대략적인 위경도 범위 — 위에 있는 것이 먼저 판정된다.
+// 상자 모양이라 경계에서는 틀릴 수 있다. 그래서 모양이 단순한 도시만 두고,
+// 도(道) 단위는 상자로 판별하지 않는다. (도는 카카오가 알려준 시도 이름으로만 안다)
 const REGION_BOUNDS = [
   { key: 'seoul', latMin: 37.41, latMax: 37.72, lngMin: 126.76, lngMax: 127.18 },
   { key: 'busan', latMin: 35.0, latMax: 35.32, lngMin: 128.8, lngMax: 129.35 },
   { key: 'jeju', latMin: 33.1, latMax: 33.6, lngMin: 126.1, lngMax: 126.98 },
   { key: 'jeonju', latMin: 35.74, latMax: 35.91, lngMin: 126.95, lngMax: 127.22 },
-  { key: 'gyeongju', latMin: 35.74, latMax: 36.05, lngMin: 128.9, lngMax: 129.45 }
+  { key: 'gyeongju', latMin: 35.74, latMax: 36.05, lngMin: 128.9, lngMax: 129.45 },
+  { key: 'incheon', latMin: 37.33, latMax: 37.6, lngMin: 126.55, lngMax: 126.76 },
+  { key: 'daejeon', latMin: 36.2, latMax: 36.47, lngMin: 127.27, lngMax: 127.53 },
+  { key: 'sejong', latMin: 36.47, latMax: 36.72, lngMin: 127.17, lngMax: 127.38 },
+  { key: 'daegu', latMin: 35.7, latMax: 36.0, lngMin: 128.42, lngMax: 128.72 },
+  { key: 'gwangju', latMin: 35.05, latMax: 35.26, lngMin: 126.66, lngMax: 127.0 },
+  { key: 'ulsan', latMin: 35.4, latMax: 35.7, lngMin: 129.05, lngMax: 129.45 }
 ];
+
+// 카카오 주소 변환이 돌려주는 시도 이름 → 지역 키
+const SIDO_KEYS = {
+  서울: 'seoul',
+  부산: 'busan',
+  대구: 'daegu',
+  인천: 'incheon',
+  광주: 'gwangju',
+  대전: 'daejeon',
+  울산: 'ulsan',
+  세종: 'sejong',
+  경기: 'gyeonggi',
+  강원: 'gangwon',
+  충북: 'chungbuk',
+  충남: 'chungnam',
+  전북: 'jeonbuk',
+  전남: 'jeonnam',
+  경북: 'gyeongbuk',
+  경남: 'gyeongnam',
+  제주: 'jeju'
+};
+
+// 앞 두 글자만 따면 틀리는 긴 이름들
+const LONG_SIDO_NAMES = {
+  충청북도: '충북',
+  충청남도: '충남',
+  전라북도: '전북',
+  전라남도: '전남',
+  경상북도: '경북',
+  경상남도: '경남'
+};
+
+// 시도보다 작은 대표 여행지가 어느 시도에 속하는지
+const SUB_CITY_PARENT = { jeonju: 'jeonbuk', gyeongju: 'gyeongbuk' };
+
+/**
+ * 시도 이름을 두 글자 약칭으로 통일한다. 모르는 이름이면 null.
+ *   "대전" / "대전광역시" → "대전",  "강원특별자치도" → "강원",  "충청북도" → "충북"
+ */
+export const normalizeSido = (name) => {
+  const text = String(name ?? '').trim();
+  if (!text) return null;
+  const short = LONG_SIDO_NAMES[text] || text.slice(0, 2);
+  return SIDO_KEYS[short] ? short : null;
+};
+
+/**
+ * 카카오 주소 변환 결과에서 장소 이름으로 쓸 만한 것을 고른다.
+ * 건물 이름이 있으면 그것을, 없으면 "중구 은행동" 같은 구·동 이름을 쓴다.
+ * (근처 가게 이름을 추측해 넣지 않는다 — 틀린 가게 이름보다 정확한 동네 이름이 낫다)
+ */
+export const pickPlaceName = (result) => {
+  const building = String(result?.road_address?.building_name ?? '').trim();
+  if (building) return building;
+
+  const address = result?.address || result?.road_address;
+  if (!address) return '';
+  // "전주시 완산구" 처럼 두 단계로 오면 뒤쪽(구)만 쓴다.
+  const district = String(address.region_2depth_name ?? '').trim().split(' ').pop();
+  const town = String(address.region_3depth_name ?? '').trim();
+  return [district, town].filter(Boolean).join(' ');
+};
 
 // ── 위치 계산 ────────────────────────────────────────
 
@@ -87,19 +174,75 @@ export function getRegionFromCoords(lat, lng) {
   return hit ? hit.key : null;
 }
 
+/**
+ * 한 지점이 속한 지역 키 목록.
+ * 기록할 때 카카오가 알려준 시도(spot.sido)가 있으면 그것을 믿고, 없는 예전 글만 좌표 상자로 판별한다.
+ */
+export function getRegionKeysForSpot(spot) {
+  const boxKey = getRegionFromCoords(
+    spot?.lat ?? spot?.latitude ?? spot?.y,
+    spot?.lng ?? spot?.longitude ?? spot?.x
+  );
+  const sidoKey = SIDO_KEYS[normalizeSido(spot?.sido)] || null;
+
+  if (!sidoKey) return boxKey ? [boxKey] : [];
+  // 전주·경주는 시도보다 작아서 상자로만 알 수 있다. 같은 시도 안일 때만 함께 넣는다.
+  return boxKey && SUB_CITY_PARENT[boxKey] === sidoKey ? [boxKey, sidoKey] : [sidoKey];
+}
+
 /** 여행 경로에 포함된 지역 키 목록 */
 export function extractRegionsFromRoute(route) {
   if (!Array.isArray(route)) return [];
   const found = new Set();
-  route.forEach((spot) => {
-    const region = getRegionFromCoords(
-      spot?.lat ?? spot?.latitude ?? spot?.y,
-      spot?.lng ?? spot?.longitude ?? spot?.x
-    );
-    if (region) found.add(region);
-  });
+  route.forEach((spot) => getRegionKeysForSpot(spot).forEach((key) => found.add(key)));
   return [...found];
 }
+
+// ── 장소 묶기 ────────────────────────────────────────
+
+const DEFAULT_PLACE_NAME = /^장소 \d+$/;
+
+/** 아직 이름을 붙이지 않은 지점인지 ("장소 3" 같은 기본 이름이거나 비어 있음) */
+export const isDefaultPlaceName = (name) => {
+  const text = String(name ?? '').trim();
+  return !text || DEFAULT_PLACE_NAME.test(text);
+};
+
+/**
+ * 사진 단위로 저장된 경로를 "장소" 단위로 묶는다.
+ * 기록할 때 80m 이내의 사진은 같은 좌표로 맞춰 두는데, 저장은 사진마다 따로 되므로
+ * 그대로 세면 한 카페에서 찍은 사진 3장이 "방문 장소 3곳"이 된다.
+ *
+ * 연달아 있는 지점이 좌표가 같으면 한 장소로 본다. 단, 사용자가 서로 다른 이름을
+ * 직접 붙였다면 구분하려는 뜻이므로 묶지 않는다.
+ *
+ * 반환: [{ name, lat, lng, spots: [...], indexes: [원래 경로에서의 위치...] }]
+ */
+export function groupRouteByPlace(route) {
+  const groups = [];
+  (Array.isArray(route) ? route : []).forEach((spot, index) => {
+    const last = groups[groups.length - 1];
+    const sameSpot =
+      last &&
+      hasLocation(spot) &&
+      toCoordinate(spot.lat) === toCoordinate(last.lat) &&
+      toCoordinate(spot.lng) === toCoordinate(last.lng);
+    const namesAgree =
+      last && (isDefaultPlaceName(spot?.name) || isDefaultPlaceName(last.name) || spot.name === last.name);
+
+    if (sameSpot && namesAgree) {
+      last.spots.push(spot);
+      last.indexes.push(index);
+      if (isDefaultPlaceName(last.name) && !isDefaultPlaceName(spot?.name)) last.name = spot.name;
+      return;
+    }
+    groups.push({ name: spot?.name || '', lat: spot?.lat ?? null, lng: spot?.lng ?? null, spots: [spot], indexes: [index] });
+  });
+  return groups;
+}
+
+/** 경로에 들어 있는 장소 수 (사진 장수가 아니라 묶은 뒤의 수) */
+export const countPlaces = (route) => groupRouteByPlace(route).length;
 
 // ── 시간 포맷 ────────────────────────────────────────
 
@@ -168,10 +311,17 @@ export const formatDateLabel = (value) => {
 // 게시 시각(createdAt)은 "언제 올렸는지"이고, 여행 날짜는 "언제 다녀왔는지"다.
 // 여행 날짜는 따로 저장하지 않고 각 장소 사진의 촬영 시각(route[].timestamp)에서 뽑는다.
 
+/**
+ * 믿을 수 있는 촬영 시각 (ms). 없으면 0.
+ * 사진에 촬영 시각이 없으면 기록할 때 파일 날짜로 대신하고 timeEstimated 로 표시해 둔다.
+ * 파일 날짜는 내려받은 날일 수 있어서 여행 날짜·체류 시간 계산에는 쓰지 않는다.
+ */
+export const getShotTime = (spot) => (spot?.timeEstimated ? 0 : getTimestampValue(spot?.timestamp));
+
 /** 여정의 여행 기간 { start, end } (ms). 촬영 시각이 하나도 없으면 null */
 export const getTripRange = (route) => {
   const times = (Array.isArray(route) ? route : [])
-    .map((spot) => getTimestampValue(spot?.timestamp))
+    .map(getShotTime)
     .filter((ts) => ts > 0);
   if (times.length === 0) return null;
   return { start: Math.min(...times), end: Math.max(...times) };
@@ -225,8 +375,8 @@ const startOfLocalDay = (ts) => {
  * 간격에 밤이 통째로 들어가서, 그대로 쓰면 "카페에서 15시간 머무름"이 된다.
  */
 export const getStayMinutes = (spot, nextSpot, travelMinutes = 0) => {
-  const from = getTimestampValue(spot?.timestamp);
-  const to = getTimestampValue(nextSpot?.timestamp);
+  const from = getShotTime(spot);
+  const to = getShotTime(nextSpot);
   if (!from || !to) return null;
   if (startOfLocalDay(from) !== startOfLocalDay(to)) return null;
 
