@@ -22,9 +22,14 @@ import {
   FALLBACK_AVATAR,
   REGION_LABELS,
   createSocialNotification,
+  extractRegionsFromRoute,
+  formatDuration,
   formatTime,
   formatTripDate,
+  formatTripDayLabel,
   getLikeCount,
+  getSaveCount,
+  getStayMinutes,
   getTimestampValue,
   showToast
 } from '../data';
@@ -368,7 +373,10 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
   const userName = post?.authorName || '여행자';
   const userAvatar = post?.authorAvatar || FALLBACK_AVATAR;
   const likeCount = getLikeCount(post);
-  const regionLabel = post?.region ? REGION_LABELS[post.region] || post.region : null;
+  // 저장된 post.region 은 믿지 않는다. 예전 코드가 모든 글을 'seoul' 로 저장해서
+  // 대전 여행도 "서울"로 나왔다. 발견 탭과 같이 좌표에서 직접 판별한다.
+  const regionKey = extractRegionsFromRoute(post?.route)[0];
+  const regionLabel = regionKey ? REGION_LABELS[regionKey] || regionKey : null;
   const tripDate = formatTripDate(post?.route);
 
   return (
@@ -587,17 +595,24 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
                 {post.route.map((spot, i) => {
                   const nextSpot = post.route[i + 1];
-                  let stayTimeMins = 0;
+                  // 다음 사진이 다른 날이면 null — 밤을 "머무름"으로 세지 않는다.
+                  const stayTimeMins = getStayMinutes(spot, nextSpot, spot.travelTimeToNext) || 0;
 
-                  if (nextSpot && spot.timestamp && nextSpot.timestamp) {
-                    const timeDiffMins = Math.round(Math.abs(nextSpot.timestamp - spot.timestamp) / 60000);
-                    stayTimeMins = Math.max(0, timeDiffMins - (spot.travelTimeToNext || 0));
-                  }
+                  // 여러 날 여행은 날짜가 바뀌는 지점마다 "n일차" 구분선을 넣는다.
+                  const dayLabel = formatTripDayLabel(post.route, spot.timestamp);
+                  const prevDayLabel = i > 0 ? formatTripDayLabel(post.route, post.route[i - 1].timestamp) : '';
+                  const showDayLabel = dayLabel && dayLabel !== prevDayLabel;
 
                   const isCurrent = highlightIndex === i;
 
                   return (
                     <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
+                      {showDayLabel && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: i === 0 ? '0 0 6px' : '10px 0 6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: '#2D6A4F', whiteSpace: 'nowrap' }}>{dayLabel}</span>
+                          <div style={{ flex: 1, height: '1px', backgroundColor: '#D8F3DC' }}></div>
+                        </div>
+                      )}
                       <div
                         style={{
                           display: 'flex',
@@ -632,7 +647,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                           </div>
                           {stayTimeMins > 0 && (
                             <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
-                              ☕ 약 <strong>{stayTimeMins}분</strong> 머무름
+                              ☕ 약 <strong>{formatDuration(stayTimeMins)}</strong> 머무름
                             </div>
                           )}
                         </div>
@@ -643,7 +658,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                           <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
                           <div style={{ background: '#F3F4F6', color: '#4B5563', padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', margin: '2px 0', whiteSpace: 'nowrap' }}>
                             {spot.transitType === 'walk' ? '🚶 도보' : '🚗 차량'} 이동
-                            {spot.travelTimeToNext ? ` (약 ${spot.travelTimeToNext}분)` : ''}
+                            {spot.travelTimeToNext ? ` (약 ${formatDuration(spot.travelTimeToNext)})` : ''}
                           </div>
                           <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
                         </div>
@@ -676,7 +691,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#495057', display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}
               >
                 <i className={isSaved ? 'fas fa-bookmark' : 'far fa-bookmark'} style={{ color: isSaved ? '#2B8A3E' : '#495057' }}></i>{' '}
-                {Math.max(0, post.saves || 0)}
+                {getSaveCount(post)}
               </button>
             </div>
 

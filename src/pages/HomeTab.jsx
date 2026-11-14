@@ -10,6 +10,8 @@ import {
   FALLBACK_AVATAR,
   createSocialNotification,
   getDistanceFromLatLonInKm,
+  getLikeCount,
+  getSaveCount,
   getTimestampValue,
   showToast
 } from '../data';
@@ -401,9 +403,10 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       filter === 'following' ? posts.filter((p) => following?.includes(p.userId)) : posts;
 
     return [...filtered].sort((a, b) => {
-      if (sortBy === 'popular') return (b.likes || 0) - (a.likes || 0);
+      // 카드에 표시되는 수와 같은 기준으로 정렬한다. (likes/saves 숫자 필드는 목록과 어긋날 수 있다)
+      if (sortBy === 'popular') return getLikeCount(b) - getLikeCount(a);
       if (sortBy === 'comments') return (b.comments || 0) - (a.comments || 0);
-      if (sortBy === 'scraps') return (b.saves || 0) - (a.saves || 0);
+      if (sortBy === 'scraps') return getSaveCount(b) - getSaveCount(a);
       return getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt);
     });
   }, [posts, filter, following, sortBy]);

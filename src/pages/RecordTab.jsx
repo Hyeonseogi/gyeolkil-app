@@ -7,7 +7,14 @@ import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import imageCompression from 'browser-image-compression';
-import { extractRegionsFromRoute, getDistanceFromLatLonInKm, hasLocation, showToast } from '../data';
+import {
+  extractRegionsFromRoute,
+  formatDuration,
+  getDistanceFromLatLonInKm,
+  getStayMinutes,
+  hasLocation,
+  showToast
+} from '../data';
 import { deleteDraft, listDrafts, putDraft } from '../draftStore';
 
 const CLUSTER_RADIUS_KM = 0.08; // 80m 이내면 같은 장소로 묶는다
@@ -569,7 +576,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
                         1,
                         Math.ceil((distKm / (transitType === 'car' ? 40 : 4)) * 60)
                       );
-                      const stayTime = Math.max(0, timeDiffMins - estTravelTime);
+                      // 다음 사진이 다른 날이면 null — 밤을 "머무름"으로 세지 않는다.
+                      const stayTime = getStayMinutes(spot, nextSpot, estTravelTime);
 
                       routeConnectionUI = (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0 8px' }}>
@@ -596,12 +604,18 @@ const RecordTab = ({ currentUser, onPublish }) => {
                               }}
                               style={{ border: 'none', background: 'transparent', fontWeight: 'bold', color: '#52B788', outline: 'none', cursor: 'pointer' }}
                             >
-                              <option value="walk">🚶 도보 (예상 {Math.ceil((distKm / 4) * 60)}분)</option>
-                              <option value="car">🚗 차/대중교통 (예상 {Math.max(1, Math.ceil((distKm / 40) * 60))}분)</option>
+                              <option value="walk">🚶 도보 (예상 {formatDuration(Math.ceil((distKm / 4) * 60))})</option>
+                              <option value="car">🚗 차/대중교통 (예상 {formatDuration(Math.max(1, Math.ceil((distKm / 40) * 60)))})</option>
                             </select>
                             <span style={{ color: '#ccc' }}>|</span>
                             <span style={{ color: 'var(--text-sub, #868E96)' }}>
-                              ☕ <strong>약 {stayTime}분</strong> 머무름
+                              {stayTime === null ? (
+                                '🌙 다음 날로 이어짐'
+                              ) : (
+                                <>
+                                  ☕ <strong>약 {formatDuration(stayTime)}</strong> 머무름
+                                </>
+                              )}
                             </span>
                           </div>
                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
