@@ -149,6 +149,44 @@ export const formatDateLabel = (value) => {
   return `${date.getFullYear()}년 ${mm}월 ${dd}일`;
 };
 
+// ── 여행 날짜 ────────────────────────────────────────
+// 게시 시각(createdAt)은 "언제 올렸는지"이고, 여행 날짜는 "언제 다녀왔는지"다.
+// 여행 날짜는 따로 저장하지 않고 각 장소 사진의 촬영 시각(route[].timestamp)에서 뽑는다.
+
+/** 여정의 여행 기간 { start, end } (ms). 촬영 시각이 하나도 없으면 null */
+export const getTripRange = (route) => {
+  const times = (Array.isArray(route) ? route : [])
+    .map((spot) => getTimestampValue(spot?.timestamp))
+    .filter((ts) => ts > 0);
+  if (times.length === 0) return null;
+  return { start: Math.min(...times), end: Math.max(...times) };
+};
+
+/** 타임라인 정렬 기준 — 여행을 시작한 시각. 촬영 시각이 없는 예전 글은 게시 시각으로 대신한다. */
+export const getTripSortTime = (post) =>
+  getTripRange(post?.route)?.start || getTimestampValue(post?.createdAt);
+
+/**
+ * 여행 날짜 라벨. 촬영 시각이 없으면 빈 문자열.
+ *   당일치기        2026.08.14
+ *   같은 해 여러 날  2026.08.14 – 08.16
+ *   해를 넘긴 여행   2025.12.31 – 2026.01.02
+ */
+export const formatTripDate = (route) => {
+  const range = getTripRange(route);
+  if (!range) return '';
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const start = new Date(range.start);
+  const end = new Date(range.end);
+  const monthDay = (d) => `${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+  const full = (d) => `${d.getFullYear()}.${monthDay(d)}`;
+
+  if (full(start) === full(end)) return full(start);
+  if (start.getFullYear() === end.getFullYear()) return `${full(start)} – ${monthDay(end)}`;
+  return `${full(start)} – ${full(end)}`;
+};
+
 // ── 토스트 ───────────────────────────────────────────
 const TOAST_COLORS = {
   info: 'rgba(44,42,41,.92)',

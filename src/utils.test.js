@@ -5,12 +5,15 @@ import {
   formatDateLabel,
   formatNotificationTime,
   formatTime,
+  formatTripDate,
   getDistanceFromLatLonInKm,
   getNotificationTypeColors,
   getNotificationTypeIcon,
   getRegionFromCoords,
   getLikeCount,
   getTimestampValue,
+  getTripRange,
+  getTripSortTime,
   hasLocation,
   REGION_LABELS
 } from './utils';
@@ -195,6 +198,57 @@ describe('formatDateLabel — 발자취 타임라인 날짜', () => {
 
   it('시간 정보가 없으면 날짜 미상으로 표시한다', () => {
     expect(formatDateLabel(null)).toBe('날짜 미상');
+  });
+});
+
+describe('여행 날짜 — 사진 촬영 시각에서 뽑는다', () => {
+  // 로컬 시간으로 만들어야 실행 환경의 시간대와 무관하게 통과한다.
+  const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
+
+  it('가장 이른 촬영 시각과 가장 늦은 촬영 시각이 여행 기간이다 (순서가 섞여 있어도)', () => {
+    const route = [{ timestamp: at(2026, 8, 15) }, { timestamp: at(2026, 8, 14) }, { timestamp: at(2026, 8, 16) }];
+    expect(getTripRange(route)).toEqual({ start: at(2026, 8, 14), end: at(2026, 8, 16) });
+  });
+
+  it('촬영 시각이 하나도 없으면 null — 게시일을 여행 날짜인 척 내놓지 않는다', () => {
+    expect(getTripRange([{ name: '장소' }, { timestamp: null }, { timestamp: 0 }])).toBeNull();
+    expect(getTripRange([])).toBeNull();
+    expect(getTripRange(undefined)).toBeNull();
+    expect(formatTripDate([{ name: '장소' }])).toBe('');
+  });
+
+  it('촬영 시각이 없는 장소는 건너뛰고 나머지로 계산한다', () => {
+    const route = [{ name: '시각 없음' }, { timestamp: at(2026, 8, 14) }];
+    expect(formatTripDate(route)).toBe('2026.08.14');
+  });
+
+  it('당일치기는 날짜 하나로 표시한다', () => {
+    const route = [{ timestamp: at(2026, 8, 14, 9) }, { timestamp: at(2026, 8, 14, 21) }];
+    expect(formatTripDate(route)).toBe('2026.08.14');
+  });
+
+  it('같은 해 여러 날은 끝 날짜의 연도를 생략한다', () => {
+    const route = [{ timestamp: at(2026, 8, 14) }, { timestamp: at(2026, 9, 2) }];
+    expect(formatTripDate(route)).toBe('2026.08.14 – 09.02');
+  });
+
+  it('해를 넘긴 여행은 양쪽 연도를 모두 적는다', () => {
+    const route = [{ timestamp: at(2025, 12, 31) }, { timestamp: at(2026, 1, 2) }];
+    expect(formatTripDate(route)).toBe('2025.12.31 – 2026.01.02');
+  });
+
+  it('타임라인 정렬은 게시일이 아니라 여행을 시작한 날을 따른다', () => {
+    const augustTripPostedToday = { createdAt: at(2026, 11, 14), route: [{ timestamp: at(2026, 8, 14) }] };
+    const octoberTripPostedEarlier = { createdAt: at(2026, 10, 20), route: [{ timestamp: at(2026, 10, 18) }] };
+    const sorted = [augustTripPostedToday, octoberTripPostedEarlier].sort(
+      (a, b) => getTripSortTime(b) - getTripSortTime(a)
+    );
+    expect(sorted[0]).toBe(octoberTripPostedEarlier);
+  });
+
+  it('촬영 시각이 없는 예전 글은 게시 시각으로 정렬한다', () => {
+    expect(getTripSortTime({ createdAt: at(2026, 5, 1), route: [{ name: '장소' }] })).toBe(at(2026, 5, 1));
+    expect(getTripSortTime({ createdAt: at(2026, 5, 1) })).toBe(at(2026, 5, 1));
   });
 });
 

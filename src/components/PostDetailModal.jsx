@@ -23,6 +23,7 @@ import {
   REGION_LABELS,
   createSocialNotification,
   formatTime,
+  formatTripDate,
   getLikeCount,
   getTimestampValue,
   showToast
@@ -368,6 +369,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
   const userAvatar = post?.authorAvatar || FALLBACK_AVATAR;
   const likeCount = getLikeCount(post);
   const regionLabel = post?.region ? REGION_LABELS[post.region] || post.region : null;
+  const tripDate = formatTripDate(post?.route);
 
   return (
     <div
@@ -484,6 +486,12 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
             {/* 본문 */}
             <div style={{ padding: '16px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', marginBottom: '8px' }}>{post.title}</h2>
+              {/* 위쪽 작성자 줄의 시간은 "올린 때"이고, 이 줄은 사진에서 읽은 "다녀온 때"다. */}
+              {tripDate && (
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#2D6A4F', marginBottom: '8px' }}>
+                  🗓 {tripDate} 여행
+                </div>
+              )}
               <div style={{ fontSize: '14px', color: '#495057', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{post.body}</div>
               {post.tags?.length > 0 && (
                 <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import RouteMap from './RouteMap';
-import { FALLBACK_AVATAR, formatTime, getLikeCount } from '../data';
+import { FALLBACK_AVATAR, formatTime, formatTripDate, getLikeCount } from '../data';
 
 /**
  * 피드 카드 한 장.
@@ -15,6 +15,8 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
   const userAvatar = post.authorAvatar || FALLBACK_AVATAR;
   const isLiked = !!currentUserId && post.likedBy?.includes(currentUserId);
   const isSaved = !!currentUserId && post.savedBy?.includes(currentUserId);
+  // 이름 옆의 "n시간 전"은 올린 때, 이 값은 사진에서 읽은 다녀온 때.
+  const tripDate = formatTripDate(post.route);
 
   // 깨진 이미지는 슬라이드에서 제외해 빈 칸이 생기지 않도록 한다.
   const photoSpots = (Array.isArray(post.route) ? post.route : []).filter(
@@ -72,7 +74,8 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
               textOverflow: 'ellipsis'
             }}
           >
-            📍 {post.route?.[0]?.name || '위치 정보 없음'}
+            {/* 날짜를 앞에 둔다 — 긴 장소 이름이 말줄임될 때 날짜까지 잘리지 않도록 */}
+            {tripDate ? `🗓 ${tripDate} · ` : ''}📍 {post.route?.[0]?.name || '위치 정보 없음'}
           </div>
         </div>
       </header>
