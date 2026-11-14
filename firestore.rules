@@ -1,0 +1,124 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// 곁길(Gyeolkil) Firestore 보안 규칙
+//
+// 배포:  firebase deploy --only firestore:rules
+//
+// 기본 원칙
+//  1) 로그인한 사용자만 읽고 쓸 수 있다.
+//  2) 글·댓글·모집글은 "작성자 본인"만 수정/삭제할 수 있다.
+//  3) 남의 유저 문서에 쓸 수 있는 경우는 팔로우(팔로워 목록 추가/제거) 뿐이다.
+//  4) 알림은 받는 사람만 읽고, 보내는 사람은 자기 이름으로만 만들 수 있다.
+// ─────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 이번 수정으로 실제 값이 바뀐 필드 목록
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ── 사용자 ────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSelf(userId);
+      allow delete: if isSelf(userId);
+
+      // 본인은 자유롭게 수정.
+      // 남이 수정할 수 있는 건 팔로우/언팔로우로 followers 배열이 바뀔 때뿐이다.
+      allow update: if isSelf(userId)
+        || (isSignedIn() && changedKeys().hasOnly(['followers']));
+    }
+
+    // ── 여정 게시글 ───────────────────────────────────
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // 작성자는 전체 수정 가능.
+      // 그 외 사용자는 좋아요·저장·댓글수 같은 "반응" 필드만 건드릴 수 있다.
+      allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (isSignedIn() && changedKeys().hasOnly([
+              'likes', 'likedBy', 'saves', 'savedBy', 'comments', 'commentedUserIds'
+            ]));
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow delete: if isSignedIn() && (
+          resource.data.userId == request.auth.uid
+          || get(/databases/$(database)/documents/posts/$(postId)).data.userId == request.auth.uid
+        );
+        // 댓글 작성자 본인 수정 + 누구나 답글(replies)·좋아요만 추가 가능
+        allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
+          || (isSignedIn() && changedKeys().hasOnly(['replies', 'likes', 'likedBy']));
+      }
+    }
+
+    // ── 실시간 동행 모집 ──────────────────────────────
+    match /gatherings/{gatheringId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // 방장은 전체 수정, 참가자는 참여/퇴장(멤버·상태)만 변경 가능
+      allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (isSignedIn() && changedKeys().hasOnly(['currentMembers', 'status']));
+
+      // 동행 채팅은 참여 중인 사람만 읽고 쓸 수 있다.
+      match /messages/{messageId} {
+        allow read, create: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/gatherings/$(gatheringId)).data.currentMembers;
+        allow delete: if isSignedIn()
+          && get(/databases/$(database)/documents/gatherings/$(gatheringId)).data.userId == request.auth.uid;
+      }
+    }
+
+    // ── 1:1 채팅 ──────────────────────────────────────
+    match /chatRooms/{roomId} {
+      function isMember() {
+        return isSignedIn() && request.auth.uid in resource.data.members;
+      }
+
+      allow read, update, delete: if isMember();
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.members;
+
+      match /messages/{messageId} {
+        function isRoomMember() {
+          return isSignedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.members;
+        }
+
+        allow read, create, delete: if isRoomMember();
+        // 보낸 메시지는 수정할 수 없다 (대화 내용 위조 방지)
+        allow update: if false;
+      }
+    }
+
+    // ── 알림 ─────────────────────────────────────────
+    match /notifications/{notificationId} {
+      // 내가 받은 알림만 볼 수 있다.
+      allow read, delete: if isSignedIn() && resource.data.receiverId == request.auth.uid;
+
+      // 남의 이름을 사칭해 알림을 보낼 수 없다.
+      allow create: if isSignedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.receiverId != request.auth.uid;
+
+      // 받는 사람이 '읽음' 표시만 할 수 있다.
+      allow update: if isSignedIn()
+        && resource.data.receiverId == request.auth.uid
+        && changedKeys().hasOnly(['read']);
+    }
+  }
+}

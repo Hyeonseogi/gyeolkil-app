@@ -1,47 +1,44 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { doc, collection, query, where, onSnapshot, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { createSocialNotification } from '../data';
+import { db } from '../firebase';
+import PostGrid from '../components/PostGrid';
+import { FALLBACK_AVATAR, createSocialNotification, getTimestampValue, showToast } from '../data';
 
-const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
+const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
   const [userData, setUserData] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const [posts, setPosts] = useState([]);
   const [isFollowing, setIsFollowing] = useState(false);
-  const currentUser = auth.currentUser;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 유저 정보 및 게시글 로드
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) return undefined;
 
-    // 1. 상대 유저 정보 감시
-    const userRef = doc(db, 'users', userId);
-    const unsubscribeUser = onSnapshot(userRef, (snap) => {
+    // 1. 상대 유저 정보 구독
+    const unsubscribeUser = onSnapshot(doc(db, 'users', userId), (snap) => {
       if (snap.exists()) {
         setUserData({ id: snap.id, ...snap.data() });
+        setNotFound(false);
       } else {
         setUserData(null);
+        setNotFound(true);
       }
     });
 
-    // 2. 내 팔로잉 목록 감시 (현재 이 유저를 팔로우 중인지 확인)
+    // 2. 내 팔로잉 목록 구독 (이 유저를 팔로우 중인지)
     let unsubscribeMe = () => {};
     if (currentUser) {
-      const myRef = doc(db, 'users', currentUser.uid);
-      unsubscribeMe = onSnapshot(myRef, (snap) => {
+      unsubscribeMe = onSnapshot(doc(db, 'users', currentUser.uid), (snap) => {
         setIsFollowing(!!snap.data()?.following?.includes(userId));
       });
     }
 
-    // 3. 상대 유저가 작성한 게시글 로드
+    // 3. 상대 유저가 작성한 게시글
     const q = query(collection(db, 'posts'), where('userId', '==', userId));
     const unsubscribePosts = onSnapshot(q, (snapshot) => {
-      const arr = [];
-      snapshot.forEach((docSnap) => arr.push({ id: docSnap.id, ...docSnap.data() }));
-      setPosts(arr.sort((a, b) => {
-        const aTime = a?.createdAt?.toMillis ? a.createdAt.toMillis() : Number(a?.createdAt || 0);
-        const bTime = b?.createdAt?.toMillis ? b.createdAt.toMillis() : Number(b?.createdAt || 0);
-        return bTime - aTime;
-      }));
+      const arr = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      arr.sort((a, b) => getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt));
+      setPosts(arr);
     });
 
     return () => {
@@ -51,48 +48,63 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
     };
   }, [userId, currentUser]);
 
-  // 팔로우 & 언팔로우 핸들러
+  // 팔로우 / 언팔로우
   const handleToggleFollow = async () => {
     if (!currentUser) {
-      alert('로그인이 필요합니다.');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
+    if (isSubmitting) return;
 
+    setIsSubmitting(true);
     const myRef = doc(db, 'users', currentUser.uid);
     const targetRef = doc(db, 'users', userId);
 
     try {
       if (isFollowing) {
-        // 언팔로우
         await updateDoc(myRef, { following: arrayRemove(userId) });
         await updateDoc(targetRef, { followers: arrayRemove(currentUser.uid) });
+        showToast('팔로우를 취소했습니다.');
       } else {
-        // 팔로우
         await updateDoc(myRef, { following: arrayUnion(userId) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
-        // 팔로우 알림 생성
         await createSocialNotification({
           receiverId: userId,
           sender: currentUser,
           type: 'follow',
           targetUserId: userId
         });
+        showToast(`${userData?.displayName || '여행자'}님을 팔로우합니다.`, 'success');
       }
     } catch (error) {
       console.error('팔로우 처리 실패:', error);
+      showToast('처리 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // 총 방문 장소 계산 (발자취)
-  const totalPlaces = useMemo(() => {
-    let count = 0;
-    posts.forEach((post) => {
-      count += post.route?.length || 0;
-    });
-    return count;
-  }, [posts]);
+  const totalPlaces = useMemo(
+    () => posts.reduce((sum, post) => sum + (post.route?.length || 0), 0),
+    [posts]
+  );
 
-  // 데이터 로딩 중 화면
+  if (notFound) {
+    return (
+      <section className="tab-page active" style={{ padding: '60px 20px', textAlign: 'center', color: '#868E96' }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
+        <p style={{ margin: '0 0 20px' }}>존재하지 않거나 탈퇴한 사용자입니다.</p>
+        <button
+          onClick={onClose}
+          style={{ padding: '10px 24px', borderRadius: '999px', border: 'none', background: '#52B788', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+        >
+          돌아가기
+        </button>
+      </section>
+    );
+  }
+
   if (!userData) {
     return (
       <section className="tab-page active" style={{ padding: '40px', textAlign: 'center', color: '#ADB5BD' }}>
@@ -121,168 +133,108 @@ const UserProfilePage = ({ userId, onOpenModal, onClose }) => {
       >
         <button
           onClick={onClose}
+          aria-label="뒤로 가기"
           style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}
         >
           <i className="fas fa-arrow-left"></i>
         </button>
-        <span style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{userData.displayName}</span>
+        <span style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{userData.displayName || '여행자'}</span>
       </div>
 
-      {/* 🚨 [NEW] 상단 프로필 영역 (MyPage와 동일한 레이아웃) */}
+      {/* 프로필 영역 (MyPage 와 동일한 레이아웃) */}
       <div style={{ padding: '24px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, #52B788, #b7e4c7)' }}>
             <img
-              src={userData.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'}
-              alt="프로필"
+              src={userData.photoURL || FALLBACK_AVATAR}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.src = FALLBACK_AVATAR;
+              }}
               style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #fff' }}
             />
           </div>
 
           <div style={{ display: 'flex', gap: '20px', textAlign: 'center', flex: 1, justifyContent: 'center' }}>
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{posts.length}</div>
-              <div style={{ fontSize: '13px', color: '#495057' }}>게시물</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{userData?.followers?.length || 0}</div>
-              <div style={{ fontSize: '13px', color: '#495057' }}>팔로워</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{userData?.following?.length || 0}</div>
-              <div style={{ fontSize: '13px', color: '#495057' }}>팔로잉</div>
-            </div>
+            {[
+              { value: posts.length, label: '게시물' },
+              { value: userData?.followers?.length || 0, label: '팔로워' },
+              { value: userData?.following?.length || 0, label: '팔로잉' }
+            ].map((stat) => (
+              <div key={stat.label}>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{stat.value}</div>
+                <div style={{ fontSize: '13px', color: '#495057' }}>{stat.label}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         <div>
           <h1 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: '#1A1A1A' }}>
-            {userData.displayName}
+            {userData.displayName || '여행자'}
           </h1>
           <p style={{ color: '#495057', fontSize: '14px', lineHeight: '1.4', margin: 0 }}>
             {userData.bio || '여행 기록을 남기는 중 ✈️'}
           </p>
         </div>
 
-        {/* 🚨 [NEW] 통계 및 팔로우 버튼 영역 */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
           {!isMe && (
             <button
               onClick={handleToggleFollow}
+              disabled={isSubmitting}
               style={{
                 flex: 1,
                 padding: '8px',
                 borderRadius: '8px',
                 border: 'none',
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'wait' : 'pointer',
                 background: isFollowing ? '#E9ECEF' : '#52B788',
                 color: isFollowing ? '#495057' : '#fff',
                 fontSize: '13px',
                 fontWeight: 'bold',
+                opacity: isSubmitting ? 0.7 : 1,
                 transition: 'all 0.2s'
               }}
             >
               {isFollowing ? '팔로잉' : '팔로우'}
             </button>
           )}
-          <button
+          <div
             style={{
               flex: 1,
               padding: '8px',
               borderRadius: '8px',
-              border: 'none',
               background: '#EBFBEE',
               fontSize: '13px',
               fontWeight: 'bold',
               color: '#2B8A3E',
-              cursor: 'default'
+              textAlign: 'center'
             }}
           >
             📍 방문 장소 {totalPlaces}곳
-          </button>
+          </div>
         </div>
       </div>
 
-      {/* 그리드 탭 네비게이션 */}
+      {/* 게시물 그리드 */}
       <div style={{ display: 'flex', borderBottom: '1px solid #F1F3F5', backgroundColor: '#fff' }}>
-        <button style={{ flex: 1, padding: '14px 0', border: 'none', background: 'none', color: '#1A1A1A', borderBottom: '2px solid #1A1A1A', fontSize: '18px' }}>
+        <div
+          style={{
+            flex: 1,
+            padding: '14px 0',
+            textAlign: 'center',
+            color: '#1A1A1A',
+            borderBottom: '2px solid #1A1A1A',
+            fontSize: '18px'
+          }}
+        >
           <i className="fas fa-th"></i>
-        </button>
-        <button disabled style={{ flex: 1, padding: '14px 0', border: 'none', background: 'none', color: '#E9ECEF', fontSize: '18px', cursor: 'default' }}>
-          <i className="fas fa-heart"></i>
-        </button>
-        <button disabled style={{ flex: 1, padding: '14px 0', border: 'none', background: 'none', color: '#E9ECEF', fontSize: '18px', cursor: 'default' }}>
-          <i className="fas fa-bookmark"></i>
-        </button>
+        </div>
       </div>
 
-      {/* 썸네일 그리드 (인스타 스타일) */}
       <div style={{ paddingBottom: '80px' }}>
-        {posts.length === 0 ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#ADB5BD' }}>
-            <div style={{ fontSize: '40px', marginBottom: '16px' }}>📭</div>
-            <p style={{ fontSize: '14px' }}>아직 등록된 기록이 없습니다.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2px' }}>
-            {posts.map((post) => {
-              const hasPhoto = post.route && post.route.length > 0 && post.route.some((s) => s.photo);
-              const firstPhoto = hasPhoto ? post.route.find((s) => s.photo).photo : null;
-
-              return (
-                <div
-                  key={post.id}
-                  onClick={() => onOpenModal(post.id)}
-                  style={{
-                    aspectRatio: '1 / 1',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    backgroundColor: '#F8F9FA'
-                  }}
-                >
-                  {firstPhoto ? (
-                    <img src={firstPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '10px',
-                        textAlign: 'center'
-                      }}
-                    >
-                      <span style={{ fontSize: '20px', marginBottom: '4px' }}>📍</span>
-                      <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#495057', wordBreak: 'keep-all' }}>
-                        {post.title.substring(0, 15)}...
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 다중 사진 아이콘 */}
-                  {hasPhoto && post.route.filter((s) => s.photo).length > 1 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        color: '#fff',
-                        fontSize: '12px',
-                        textShadow: '0 1px 4px rgba(0,0,0,0.5)'
-                      }}
-                    >
-                      <i className="far fa-clone"></i>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <PostGrid posts={posts} onOpenModal={onOpenModal} emptyMessage="아직 등록된 기록이 없습니다." />
       </div>
     </section>
   );
