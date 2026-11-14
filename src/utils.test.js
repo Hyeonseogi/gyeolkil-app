@@ -3,15 +3,20 @@ import {
   buildNotificationContent,
   extractRegionsFromRoute,
   formatDateLabel,
+  formatDuration,
   formatNotificationTime,
   formatTime,
   formatTripDate,
+  formatTripDayLabel,
   getDistanceFromLatLonInKm,
   getNotificationTypeColors,
   getNotificationTypeIcon,
   getRegionFromCoords,
   getLikeCount,
+  getSaveCount,
+  getStayMinutes,
   getTimestampValue,
+  getTripDayNumber,
   getTripRange,
   getTripSortTime,
   hasLocation,
@@ -180,6 +185,14 @@ describe('formatTime — 상대 시간 표기', () => {
     expect(formatTime(at(10 * 24 * 60 * 60 * 1000))).toMatch(/월 \d+일$/);
   });
 
+  it('올해 글은 연도 없이, 지난해 이전 글은 연도를 붙여 표기한다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    expect(formatTime(new Date(2025, 2, 7).getTime())).toBe('3월 7일');
+    expect(formatTime(new Date(2024, 5, 10).getTime())).toBe('2024년 6월 10일');
+    expect(formatNotificationTime(new Date(2023, 11, 25).getTime())).toBe('2023년 12월 25일');
+  });
+
   it('값이 없으면 빈 문자열이라 화면에 undefined 가 찍히지 않는다', () => {
     expect(formatTime(null)).toBe('');
     expect(formatTime(undefined)).toBe('');
@@ -249,6 +262,91 @@ describe('여행 날짜 — 사진 촬영 시각에서 뽑는다', () => {
   it('촬영 시각이 없는 예전 글은 게시 시각으로 정렬한다', () => {
     expect(getTripSortTime({ createdAt: at(2026, 5, 1), route: [{ name: '장소' }] })).toBe(at(2026, 5, 1));
     expect(getTripSortTime({ createdAt: at(2026, 5, 1) })).toBe(at(2026, 5, 1));
+  });
+});
+
+describe('getSaveCount — 저장 수', () => {
+  it('저장한 사람 목록이 있으면 숫자 필드보다 목록 길이를 믿는다', () => {
+    expect(getSaveCount({ savedBy: ['a', 'b'], saves: 5 })).toBe(2);
+  });
+
+  it('목록이 없는 예전 글은 숫자 필드를 쓰고, 음수나 이상한 값은 0 으로 본다', () => {
+    expect(getSaveCount({ saves: 3 })).toBe(3);
+    expect(getSaveCount({ saves: -1 })).toBe(0);
+    expect(getSaveCount({})).toBe(0);
+    expect(getSaveCount(null)).toBe(0);
+  });
+});
+
+describe('체류 시간 · 여행 일차', () => {
+  const at = (y, m, d, h = 12, min = 0) => new Date(y, m - 1, d, h, min).getTime();
+
+  it('1시간이 넘으면 시간·분으로 풀어 쓴다', () => {
+    expect(formatDuration(45)).toBe('45분');
+    expect(formatDuration(60)).toBe('1시간');
+    expect(formatDuration(130)).toBe('2시간 10분');
+    expect(formatDuration(899)).toBe('14시간 59분');
+  });
+
+  it('숫자가 아니거나 음수면 0분으로 본다', () => {
+    expect(formatDuration(undefined)).toBe('0분');
+    expect(formatDuration(-5)).toBe('0분');
+  });
+
+  it('같은 날 찍은 사진 사이는 간격에서 이동 시간을 뺀 만큼 머문 것이다', () => {
+    const cafe = { timestamp: at(2024, 3, 28, 13, 0) };
+    const park = { timestamp: at(2024, 3, 28, 15, 30) };
+    expect(getStayMinutes(cafe, park, 20)).toBe(130);
+  });
+
+  it('이동 시간이 간격보다 길어도 음수가 되지 않는다', () => {
+    const a = { timestamp: at(2024, 3, 28, 13, 0) };
+    const b = { timestamp: at(2024, 3, 28, 13, 10) };
+    expect(getStayMinutes(a, b, 30)).toBe(0);
+  });
+
+  it('다음 사진이 다음 날이면 머문 시간으로 세지 않는다 — 밤을 통째로 "머무름"이라 하지 않는다', () => {
+    const dinner = { timestamp: at(2024, 3, 28, 20, 0) };
+    const breakfast = { timestamp: at(2024, 3, 29, 10, 59) };
+    expect(getStayMinutes(dinner, breakfast, 0)).toBeNull();
+  });
+
+  it('자정을 사이에 둔 짧은 간격도 날짜가 바뀌면 세지 않는다', () => {
+    expect(getStayMinutes({ timestamp: at(2024, 3, 28, 23, 50) }, { timestamp: at(2024, 3, 29, 0, 10) })).toBeNull();
+  });
+
+  it('촬영 시각이 없으면 계산하지 않는다', () => {
+    expect(getStayMinutes({ name: '장소' }, { timestamp: at(2024, 3, 28) })).toBeNull();
+    expect(getStayMinutes({ timestamp: at(2024, 3, 28) }, undefined)).toBeNull();
+  });
+
+  const threeDays = [
+    { timestamp: at(2024, 3, 28, 13) },
+    { timestamp: at(2024, 3, 29, 10) },
+    { timestamp: at(2024, 3, 30, 9) }
+  ];
+
+  it('여행 첫날이 1일차이고, 달력 날짜가 바뀔 때마다 하루씩 는다', () => {
+    expect(getTripDayNumber(threeDays, threeDays[0].timestamp)).toBe(1);
+    expect(getTripDayNumber(threeDays, threeDays[1].timestamp)).toBe(2);
+    expect(getTripDayNumber(threeDays, threeDays[2].timestamp)).toBe(3);
+  });
+
+  it('24시간이 안 지났어도 날짜가 바뀌면 다음 일차다', () => {
+    const route = [{ timestamp: at(2024, 3, 28, 23) }, { timestamp: at(2024, 3, 29, 1) }];
+    expect(getTripDayNumber(route, route[1].timestamp)).toBe(2);
+  });
+
+  it('여러 날 여행은 "n일차 · 월.일" 구분선 문구를 만든다', () => {
+    expect(formatTripDayLabel(threeDays, threeDays[0].timestamp)).toBe('1일차 · 03.28');
+    expect(formatTripDayLabel(threeDays, threeDays[1].timestamp)).toBe('2일차 · 03.29');
+  });
+
+  it('당일치기나 촬영 시각이 없는 여정에는 구분선을 만들지 않는다', () => {
+    const dayTrip = [{ timestamp: at(2024, 3, 28, 9) }, { timestamp: at(2024, 3, 28, 18) }];
+    expect(formatTripDayLabel(dayTrip, dayTrip[1].timestamp)).toBe('');
+    expect(formatTripDayLabel([{ name: '장소' }], null)).toBe('');
+    expect(getTripDayNumber([{ name: '장소' }], at(2024, 3, 28))).toBeNull();
   });
 });
 

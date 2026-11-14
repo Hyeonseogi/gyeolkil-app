@@ -50,6 +50,13 @@ export function getLikeCount(post) {
   return Number.isFinite(likes) ? Math.max(0, likes) : 0;
 }
 
+/** 저장(스크랩) 수 — 좋아요와 같은 이유로 저장한 사람 목록(savedBy)을 기준으로 센다. */
+export function getSaveCount(post) {
+  if (Array.isArray(post?.savedBy)) return post.savedBy.length;
+  const saves = Number(post?.saves);
+  return Number.isFinite(saves) ? Math.max(0, saves) : 0;
+}
+
 /** 지점에 쓸 수 있는 좌표가 있는지 (위치 정보 없는 사진은 lat/lng 가 null) */
 export function hasLocation(spot) {
   return toCoordinate(spot?.lat) !== null && toCoordinate(spot?.lng) !== null;
@@ -106,6 +113,16 @@ export const getTimestampValue = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+/**
+ * 상대 시간으로 쓰기엔 오래된 날짜. 올해가 아니면 연도를 붙인다.
+ * ("6월 10일"만 보여주면 재작년 글도 올해 글처럼 읽힌다)
+ */
+const formatAbsoluteDate = (ts) => {
+  const date = new Date(ts);
+  const monthDay = `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  return date.getFullYear() === new Date().getFullYear() ? monthDay : `${date.getFullYear()}년 ${monthDay}`;
+};
+
 /** 방금 전 / n분 전 / n시간 전 / n일 전 */
 export function formatTime(value) {
   const ts = getTimestampValue(value);
@@ -117,8 +134,7 @@ export function formatTime(value) {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
   if (diff < 86400000 * 7) return `${Math.floor(diff / 86400000)}일 전`;
 
-  const date = new Date(ts);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  return formatAbsoluteDate(ts);
 }
 
 /** 알림 목록용 짧은 시간 표기 */
@@ -135,8 +151,7 @@ export const formatNotificationTime = (value) => {
   if (diff < hour) return `${Math.floor(diff / minute)}분 전`;
   if (diff < day) return `${Math.floor(diff / hour)}시간 전`;
 
-  const date = new Date(time);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  return formatAbsoluteDate(time);
 };
 
 /** 2025년 03월 14일 형태의 날짜 라벨 */
@@ -185,6 +200,58 @@ export const formatTripDate = (route) => {
   if (full(start) === full(end)) return full(start);
   if (start.getFullYear() === end.getFullYear()) return `${full(start)} – ${monthDay(end)}`;
   return `${full(start)} – ${full(end)}`;
+};
+
+// ── 체류 시간 · 여행 일차 ─────────────────────────────
+
+/** 분 → "45분" / "2시간" / "2시간 10분". (899분처럼 읽을 수 없는 숫자를 그대로 내놓지 않는다) */
+export const formatDuration = (minutes) => {
+  const total = Math.max(0, Math.round(Number(minutes) || 0));
+  if (total < 60) return `${total}분`;
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`;
+};
+
+/** 그 시각이 속한 날의 0시 (기기 시간대 기준) */
+const startOfLocalDay = (ts) => {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+};
+
+/**
+ * 한 장소에 머문 시간(분) = 다음 사진까지의 간격 − 이동 시간.
+ * 다음 사진이 다른 날에 찍혔으면 null 을 돌려준다.
+ * 간격에 밤이 통째로 들어가서, 그대로 쓰면 "카페에서 15시간 머무름"이 된다.
+ */
+export const getStayMinutes = (spot, nextSpot, travelMinutes = 0) => {
+  const from = getTimestampValue(spot?.timestamp);
+  const to = getTimestampValue(nextSpot?.timestamp);
+  if (!from || !to) return null;
+  if (startOfLocalDay(from) !== startOfLocalDay(to)) return null;
+
+  const gap = Math.round(Math.abs(to - from) / 60000);
+  return Math.max(0, gap - (Number(travelMinutes) || 0));
+};
+
+/** 이 지점이 여행 며칠째인지 (첫날 = 1). 촬영 시각이 없으면 null */
+export const getTripDayNumber = (route, timestamp) => {
+  const range = getTripRange(route);
+  const ts = getTimestampValue(timestamp);
+  if (!range || !ts) return null;
+  return Math.round((startOfLocalDay(ts) - startOfLocalDay(range.start)) / 86400000) + 1;
+};
+
+/** 여러 날 여행의 타임라인 구분선 문구 — "2일차 · 03.29". 당일치기거나 시각이 없으면 빈 문자열 */
+export const formatTripDayLabel = (route, timestamp) => {
+  const range = getTripRange(route);
+  const day = getTripDayNumber(route, timestamp);
+  if (!range || !day) return '';
+  if (startOfLocalDay(range.start) === startOfLocalDay(range.end)) return '';
+
+  const d = new Date(getTimestampValue(timestamp));
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${day}일차 · ${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 };
 
 // ── 토스트 ───────────────────────────────────────────

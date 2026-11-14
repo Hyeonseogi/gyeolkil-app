@@ -218,7 +218,7 @@ src/
 ├── App.jsx                  라우팅(탭 전환) · 알림 패널 · 전역 인증 상태
 ├── firebase.js              Firebase 초기화 + 환경 변수 검증
 ├── utils.js                 순수 유틸 (거리·지역·시간 포맷) — 테스트 대상
-├── utils.test.js            단위 테스트 50개
+├── utils.test.js            단위 테스트 64개
 ├── data.js                  utils 재수출 + 알림 생성 헬퍼
 ├── deletion.js              연쇄 삭제 (게시물·댓글·사진, 채팅방, 회원탈퇴)
 ├── draftStore.js            임시저장 (IndexedDB, 사진 포함)
