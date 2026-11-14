@@ -115,11 +115,7 @@ allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
   || (isSignedIn() && changedKeys().hasOnly(['likes','likedBy','saves','savedBy','comments','commentedUserIds']));
 ```
 
-배포:
-
-```bash
-firebase deploy --only firestore:rules,storage
-```
+배포 방법은 8-3 을 참고하세요.
 
 ### 5-2. API 키를 브라우저에 두지 않기
 
@@ -141,8 +137,9 @@ Kakao Mobility **REST 키**와 TMAP **앱키**는 서버 전용 비밀키입니�
 브라우저  →  /api/route/car         →  [서버가 Authorization 주입]      →  Kakao Mobility
 ```
 
-두 경로 모두 응답을 하루 캐시(`s-maxage=86400`)하므로 같은 구간을 반복 조회해도
+자동차 경로(GET)는 응답을 하루 캐시(`s-maxage=86400`)하므로 같은 구간을 반복 조회해도
 외부 API 호출량이 늘지 않습니다.
+보행자 경로는 TMAP 규격상 POST 요청이라 CDN 캐시 대상이 아니며, 조회할 때마다 TMAP 을 호출합니다.
 
 서버가 없는 순수 정적 호스팅에 올릴 경우에는 이 호출이 실패하는데,
 그때는 자동으로 **두 지점을 직선으로 잇는 폴백**이 동작해 앱이 멈추지 않습니다.
@@ -221,13 +218,16 @@ src/
 ├── App.jsx                  라우팅(탭 전환) · 알림 패널 · 전역 인증 상태
 ├── firebase.js              Firebase 초기화 + 환경 변수 검증
 ├── utils.js                 순수 유틸 (거리·지역·시간 포맷) — 테스트 대상
-├── utils.test.js            단위 테스트 38개
+├── utils.test.js            단위 테스트 42개
 ├── data.js                  utils 재수출 + 알림 생성 헬퍼
+├── deletion.js              연쇄 삭제 (게시물·댓글·사진, 채팅방, 회원탈퇴)
+├── draftStore.js            임시저장 (IndexedDB, 사진 포함)
 ├── components/
 │   ├── PostCard.jsx         피드 카드 (홈·발견 공용)
 │   ├── PostGrid.jsx         3열 썸네일 그리드 (마이페이지·타인 프로필 공용)
 │   ├── PostDetailModal.jsx  여정 상세 · 타임라인 · 댓글/답글
 │   ├── RouteMap.jsx         카카오맵 경로 렌더링
+│   ├── LocationPicker.jsx   위치 없는 사진의 장소 직접 지정
 │   ├── LoginScreen.jsx      구글 로그인
 │   ├── ErrorBoundary.jsx    렌더링 오류 안내 화면
 │   └── SetupNotice.jsx      환경 변수 누락 안내 화면
@@ -279,9 +279,24 @@ Kakao: 지도 영역이 자리표시자로만 표시됩니다.
 ### 8-3. 보안 규칙 배포
 
 보안 규칙은 Vercel 이 아니라 Firebase 로 따로 올립니다.
+**`main` 에 머지해도 규칙은 자동으로 바뀌지 않으므로**, 규칙 파일을 고쳤다면 아래 명령을 직접 실행해야 합니다.
 
 ```bash
-firebase deploy --only firestore:rules,storage
+npm install -g firebase-tools   # 최초 1회
+firebase login                  # 최초 1회
+firebase deploy --only firestore:rules,storage --project <Firebase 프로젝트 ID>
+```
+
+어떤 파일을 올릴지는 `firebase.json` 에 적혀 있습니다. (`firestore.rules`, `storage.rules`)
+프로젝트 ID 는 `.env.local` 의 `VITE_FIREBASE_PROJECT_ID` 값과 같습니다.
+
+CLI 를 쓰지 않을 경우 Firebase 콘솔 > Firestore Database > **규칙** 탭(Storage 도 동일)에
+파일 내용을 붙여 넣고 **게시**해도 됩니다.
+
+배포 후에는 로그인하지 않은 요청이 거부되는지 확인합니다. `403` 이 나오면 정상입니다.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" "https://firestore.googleapis.com/v1/projects/<Firebase 프로젝트 ID>/databases/(default)/documents/posts?pageSize=1"
 ```
 
 ---
@@ -291,6 +306,7 @@ firebase deploy --only firestore:rules,storage
 - **지역 판별** 은 서울·부산·제주·전주·경주 5개 지역의 위경도 범위를 기준으로 합니다.
   그 외 지역은 지역 필터에 잡히지 않습니다.
 - **체류 시간** 은 사진 촬영 간격에서 이동 시간을 뺀 추정값입니다.
-- 위치 정보(EXIF GPS)가 없는 사진은 기본 좌표(서울시청)로 저장되며, 화면에 안내가 표시됩니다.
+- 위치 정보(EXIF GPS)가 없는 사진은 임의의 기본 좌표로 채우지 않습니다.
+  기록 2단계에서 장소를 직접 지정해야 다음 단계로 넘어갈 수 있습니다.
 - 경로 탐색은 서버(개발 서버 프록시 또는 Vercel 서버리스 함수)를 통해서만 동작합니다.
   서버가 없는 순수 정적 호스팅에서는 직선 경로로 대체됩니다.
