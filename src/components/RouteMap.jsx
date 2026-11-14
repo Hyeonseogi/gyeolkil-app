@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Map, Polyline, CustomOverlayMap } from 'react-kakao-maps-sdk';
-import { toCoordinate } from '../data';
+import { groupRouteByPlace, toCoordinate } from '../data';
 
 // 카카오 SDK 가 아직(또는 끝내) 로드되지 않았을 때 대신 보여줄 자리표시자
 const MapPlaceholder = ({ width, height, message }) => (
@@ -75,6 +75,10 @@ const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260
     [route]
   );
 
+  // 핀은 사진마다가 아니라 장소마다 하나씩 찍는다.
+  // 같은 장소의 사진들은 좌표가 같아서, 따로 찍으면 핀이 겹쳐 번호 하나만 보인다.
+  const places = useMemo(() => groupRouteByPlace(validRoute), [validRoute]);
+
   const polylinePath = useMemo(() => {
     const source = Array.isArray(detailedPath) && detailedPath.length > 0 ? detailedPath : validRoute;
     return source
@@ -134,18 +138,18 @@ const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260
         />
       )}
 
-      {validRoute.map((spot, i) => {
-        // 부모가 현재 보고 있는 사진의 인덱스와 같은 마커를 강조
-        const isActive = highlightIndex === i;
+      {places.map((place, i) => {
+        // 부모가 현재 보고 있는 사진이 이 장소에 속하면 마커를 강조
+        const isActive = highlightIndex !== null && place.indexes.includes(highlightIndex);
 
         return (
           <CustomOverlayMap
-            key={`${spot.lat},${spot.lng},${i}`}
-            position={{ lat: spot.lat, lng: spot.lng }}
+            key={`${place.lat},${place.lng},${i}`}
+            position={{ lat: place.lat, lng: place.lng }}
             yAnchor={0.5} // 핀 중심을 좌표 한가운데로 맞춤
           >
             <div
-              title={spot.name || `${i + 1}번째 장소`}
+              title={place.name || `${i + 1}번째 장소`}
               style={{
                 background: isActive ? '#52B788' : '#2C2A29',
                 color: '#fff',

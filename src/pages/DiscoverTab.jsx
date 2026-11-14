@@ -17,7 +17,9 @@ import {
 import { db } from '../firebase';
 import {
   FALLBACK_AVATAR,
+  FEATURED_REGION_KEYS,
   REGION_LABELS,
+  countPlaces,
   createSocialNotification,
   extractRegionsFromRoute,
   getLikeCount,
@@ -292,6 +294,18 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
       });
   }, [dbPosts, region, search]);
 
+  // 지역 버튼: 대표 여행지는 항상, 그 밖의 지역은 불러온 글에 있을 때만 보여준다.
+  // (전국 시도를 다 늘어놓으면 눌러도 글이 없는 버튼이 대부분이 된다)
+  const regionKeys = useMemo(() => {
+    const extra = new Set();
+    dbPosts.forEach((post) => {
+      (post.regions || []).forEach((key) => {
+        if (!FEATURED_REGION_KEYS.includes(key) && REGION_LABELS[key]) extra.add(key);
+      });
+    });
+    return ['all', ...FEATURED_REGION_KEYS, ...extra];
+  }, [dbPosts]);
+
   return (
     <section
       className="tab-page active"
@@ -425,7 +439,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                       >
                         {post.title}
                       </h4>
-                      <p style={{ fontSize: '12px', color: '#868E96', margin: 0 }}>📍 {post.route?.length || 0}개의 스팟</p>
+                      <p style={{ fontSize: '12px', color: '#868E96', margin: 0 }}>📍 {countPlaces(post.route)}개의 스팟</p>
                     </div>
                   </div>
                 );
@@ -442,7 +456,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
         <div style={{ padding: '0 0 16px', backgroundColor: '#fff', borderBottom: '8px solid #F1F3F5' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: '0 16px 12px' }}>🗺️ 어디로 떠날까요?</h3>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '0 16px 8px' }} className="photo-slider">
-            {Object.entries(REGION_LABELS).map(([key, label]) => (
+            {regionKeys.map((key) => (
               <button
                 key={key}
                 onClick={() => setRegion(key)}
@@ -462,7 +476,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                   boxShadow: region === key ? '0 4px 12px rgba(82, 183, 136, 0.3)' : 'none'
                 }}
               >
-                {label}
+                {REGION_LABELS[key]}
               </button>
             ))}
           </div>

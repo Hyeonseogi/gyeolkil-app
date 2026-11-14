@@ -29,7 +29,9 @@ import {
   formatTripDayLabel,
   getLikeCount,
   getSaveCount,
+  getShotTime,
   getStayMinutes,
+  groupRouteByPlace,
   getTimestampValue,
   showToast
 } from '../data';
@@ -118,6 +120,19 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
   // 현재 보고 있는 사진이 경로의 몇 번째 지점인지 (지도 마커 강조에 사용)
   const highlightIndex = photoSpots[activeIndex]?.routeIndex ?? null;
+
+  // 경로는 사진 단위로 저장돼 있다. 타임라인과 번호는 "장소" 단위로 보여준다.
+  const places = useMemo(() => groupRouteByPlace(route), [route]);
+  // 경로의 i 번째 사진이 몇 번째 장소인지 (1부터)
+  const placeNumbers = useMemo(() => {
+    const numbers = [];
+    places.forEach((place, placeIdx) => {
+      place.indexes.forEach((routeIdx) => {
+        numbers[routeIdx] = placeIdx + 1;
+      });
+    });
+    return numbers;
+  }, [places]);
 
   const handleToggleLike = async () => {
     if (!currentUser) {
@@ -558,7 +573,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                             }}
                             style={{ cursor: isMyPost ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
-                            {routeIndex + 1}. {spot.name || '이름 없는 장소'}
+                            {placeNumbers[routeIndex]}. {spot.name || '이름 없는 장소'}
                             {isMyPost && <i className="fas fa-pen" style={{ fontSize: '10px', opacity: 0.6 }}></i>}
                           </div>
                         )}
@@ -593,20 +608,25 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
               <div style={{ padding: '20px 16px', borderTop: '8px solid #F1F3F5', backgroundColor: '#fff' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#1A1A1A', marginBottom: '16px' }}>⏱️ 여정 타임라인</h3>
 
-                {post.route.map((spot, i) => {
-                  const nextSpot = post.route[i + 1];
-                  // 다음 사진이 다른 날이면 null — 밤을 "머무름"으로 세지 않는다.
-                  const stayTimeMins = getStayMinutes(spot, nextSpot, spot.travelTimeToNext) || 0;
+                {places.map((place, i) => {
+                  const nextPlace = places[i + 1];
+                  const firstSpot = place.spots[0];
+                  // 다음 장소로 떠날 때의 이동 정보는 이 장소의 마지막 사진에 들어 있다.
+                  const lastSpot = place.spots[place.spots.length - 1];
+
+                  // 이 장소 첫 사진부터 다음 장소 첫 사진까지에서 이동 시간을 뺀다.
+                  // 다음 사진이 다른 날이거나 촬영 시각이 추정값이면 null — "머무름"으로 세지 않는다.
+                  const stayTimeMins = getStayMinutes(firstSpot, nextPlace?.spots[0], lastSpot.travelTimeToNext) || 0;
 
                   // 여러 날 여행은 날짜가 바뀌는 지점마다 "n일차" 구분선을 넣는다.
-                  const dayLabel = formatTripDayLabel(post.route, spot.timestamp);
-                  const prevDayLabel = i > 0 ? formatTripDayLabel(post.route, post.route[i - 1].timestamp) : '';
+                  const dayLabel = formatTripDayLabel(route, getShotTime(firstSpot));
+                  const prevDayLabel = i > 0 ? formatTripDayLabel(route, getShotTime(places[i - 1].spots[0])) : '';
                   const showDayLabel = dayLabel && dayLabel !== prevDayLabel;
 
-                  const isCurrent = highlightIndex === i;
+                  const isCurrent = highlightIndex !== null && place.indexes.includes(highlightIndex);
 
                   return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div key={place.indexes[0]} style={{ display: 'flex', flexDirection: 'column' }}>
                       {showDayLabel && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: i === 0 ? '0 0 6px' : '10px 0 6px' }}>
                           <span style={{ fontSize: '11px', fontWeight: '800', color: '#2D6A4F', whiteSpace: 'nowrap' }}>{dayLabel}</span>
@@ -643,7 +663,12 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 'bold', fontSize: '14px', color: isCurrent ? '#2D6A4F' : '#1A1A1A' }}>
-                            {spot.name || '이름 없는 장소'}
+                            {place.name || '이름 없는 장소'}
+                            {place.spots.length > 1 && (
+                              <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', color: '#868E96' }}>
+                                📷 사진 {place.spots.length}장
+                              </span>
+                            )}
                           </div>
                           {stayTimeMins > 0 && (
                             <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
@@ -653,12 +678,12 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                         </div>
                       </div>
 
-                      {nextSpot && (
+                      {nextPlace && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px 0 2px 18px' }}>
                           <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
                           <div style={{ background: '#F3F4F6', color: '#4B5563', padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', margin: '2px 0', whiteSpace: 'nowrap' }}>
-                            {spot.transitType === 'walk' ? '🚶 도보' : '🚗 차량'} 이동
-                            {spot.travelTimeToNext ? ` (약 ${formatDuration(spot.travelTimeToNext)})` : ''}
+                            {lastSpot.transitType === 'walk' ? '🚶 도보' : '🚗 차량'} 이동
+                            {lastSpot.travelTimeToNext ? ` (약 ${formatDuration(lastSpot.travelTimeToNext)})` : ''}
                           </div>
                           <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
                         </div>

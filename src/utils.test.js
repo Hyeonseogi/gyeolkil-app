@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildNotificationContent,
+  countPlaces,
   extractRegionsFromRoute,
   formatDateLabel,
   formatDuration,
@@ -12,14 +13,20 @@ import {
   getNotificationTypeColors,
   getNotificationTypeIcon,
   getRegionFromCoords,
+  getRegionKeysForSpot,
   getLikeCount,
   getSaveCount,
+  getShotTime,
   getStayMinutes,
   getTimestampValue,
   getTripDayNumber,
   getTripRange,
   getTripSortTime,
+  groupRouteByPlace,
   hasLocation,
+  isDefaultPlaceName,
+  normalizeSido,
+  pickPlaceName,
   REGION_LABELS
 } from './utils';
 
@@ -89,13 +96,20 @@ describe('getRegionFromCoords — 좌표로 지역 판별', () => {
     ['서울 성수동', 37.5445, 127.056, 'seoul'],
     ['부산 해운대', 35.158, 129.16, 'busan'],
     ['제주 서귀포', 33.252, 126.562, 'jeju'],
-    ['전주 한옥마을', 35.815, 127.154, 'jeonju']
+    ['전주 한옥마을', 35.815, 127.154, 'jeonju'],
+    ['대전 성심당', 36.3277, 127.4273, 'daejeon'],
+    ['대구 동성로', 35.869, 128.594, 'daegu'],
+    ['광주 충장로', 35.1495, 126.9146, 'gwangju'],
+    ['울산 태화강', 35.5484, 129.3008, 'ulsan'],
+    ['인천 송도', 37.3894, 126.6413, 'incheon'],
+    ['세종 정부청사', 36.504, 127.265, 'sejong']
   ])('%s → %s', (_label, lat, lng, expected) => {
     expect(getRegionFromCoords(lat, lng)).toBe(expected);
   });
 
-  it('등록된 지역 밖이면 null 이다', () => {
-    expect(getRegionFromCoords(35.87, 128.6)).toBeNull(); // 대구
+  it('도(道) 지역은 상자로 판별하지 않는다 — 경계가 복잡해 틀린 지역을 내놓게 된다', () => {
+    expect(getRegionFromCoords(37.8813, 127.7298)).toBeNull(); // 강원 춘천
+    expect(getRegionFromCoords(36.5684, 128.7294)).toBeNull(); // 경북 안동
     expect(getRegionFromCoords(0, 0)).toBeNull();
   });
 
@@ -105,9 +119,153 @@ describe('getRegionFromCoords — 좌표로 지역 판별', () => {
   });
 
   it('판별된 지역 키는 화면에 쓰는 라벨을 모두 가지고 있다', () => {
-    ['seoul', 'busan', 'jeju', 'jeonju', 'gyeongju'].forEach((key) => {
-      expect(REGION_LABELS[key]).toBeTruthy();
-    });
+    ['seoul', 'busan', 'jeju', 'jeonju', 'gyeongju', 'incheon', 'daejeon', 'daegu', 'gwangju', 'ulsan', 'sejong'].forEach(
+      (key) => {
+        expect(REGION_LABELS[key]).toBeTruthy();
+      }
+    );
+  });
+});
+
+describe('시도 이름 — 카카오 주소 변환 결과 다루기', () => {
+  it('짧은 이름·긴 이름·특별자치도 이름을 모두 두 글자 약칭으로 통일한다', () => {
+    expect(normalizeSido('대전')).toBe('대전');
+    expect(normalizeSido('대전광역시')).toBe('대전');
+    expect(normalizeSido('강원특별자치도')).toBe('강원');
+    expect(normalizeSido('전북특별자치도')).toBe('전북');
+    expect(normalizeSido('세종특별자치시')).toBe('세종');
+    expect(normalizeSido('제주특별자치도')).toBe('제주');
+  });
+
+  it('앞 두 글자만 따면 틀리는 이름도 맞게 줄인다', () => {
+    expect(normalizeSido('충청북도')).toBe('충북');
+    expect(normalizeSido('경상남도')).toBe('경남');
+    expect(normalizeSido('전라남도')).toBe('전남');
+  });
+
+  it('모르는 이름이나 빈 값은 null 이다', () => {
+    expect(normalizeSido('도쿄도')).toBeNull();
+    expect(normalizeSido('')).toBeNull();
+    expect(normalizeSido(undefined)).toBeNull();
+  });
+
+  it('시도를 알면 상자 판별보다 시도를 믿는다 — 도 지역도 지역이 잡힌다', () => {
+    const chuncheon = { lat: 37.8813, lng: 127.7298, sido: '강원' };
+    expect(getRegionKeysForSpot(chuncheon)).toEqual(['gangwon']);
+  });
+
+  it('서울 상자 안이지만 실제로는 경기인 곳은 경기로 본다', () => {
+    const hanam = { lat: 37.54, lng: 127.17, sido: '경기' };
+    expect(getRegionFromCoords(hanam.lat, hanam.lng)).toBe('seoul');
+    expect(getRegionKeysForSpot(hanam)).toEqual(['gyeonggi']);
+  });
+
+  it('전주·경주는 시도와 함께 담는다 (대표 여행지 버튼과 시도 버튼 양쪽에서 찾을 수 있게)', () => {
+    expect(getRegionKeysForSpot({ lat: 35.815, lng: 127.154, sido: '전북' })).toEqual(['jeonju', 'jeonbuk']);
+  });
+
+  it('시도 정보가 없는 예전 글은 좌표 상자로 판별한다', () => {
+    expect(getRegionKeysForSpot({ lat: 36.3277, lng: 127.4273 })).toEqual(['daejeon']);
+    expect(getRegionKeysForSpot({ lat: 37.8813, lng: 127.7298 })).toEqual([]);
+  });
+
+  it('경로의 지역에도 시도가 반영된다', () => {
+    const route = [
+      { lat: 37.8813, lng: 127.7298, sido: '강원' },
+      { lat: 37.75, lng: 128.87, sido: '강원' },
+      { lat: 37.5445, lng: 127.056, sido: '서울' }
+    ];
+    expect(extractRegionsFromRoute(route)).toEqual(['gangwon', 'seoul']);
+  });
+});
+
+describe('pickPlaceName — 자동으로 채울 장소 이름', () => {
+  it('건물 이름이 있으면 그것을 쓴다', () => {
+    const result = {
+      address: { region_2depth_name: '종로구', region_3depth_name: '세종로' },
+      road_address: { building_name: '경복궁' }
+    };
+    expect(pickPlaceName(result)).toBe('경복궁');
+  });
+
+  it('건물 이름이 비어 있으면 구·동 이름을 쓴다', () => {
+    const result = {
+      address: { region_2depth_name: '중구', region_3depth_name: '은행동' },
+      road_address: { building_name: '' }
+    };
+    expect(pickPlaceName(result)).toBe('중구 은행동');
+  });
+
+  it('"전주시 완산구"처럼 두 단계면 뒤쪽만 쓴다', () => {
+    const result = { address: { region_2depth_name: '전주시 완산구', region_3depth_name: '풍남동3가' }, road_address: null };
+    expect(pickPlaceName(result)).toBe('완산구 풍남동3가');
+  });
+
+  it('쓸 정보가 없으면 빈 문자열이다 — 호출한 쪽이 기본 이름을 유지한다', () => {
+    expect(pickPlaceName(null)).toBe('');
+    expect(pickPlaceName({})).toBe('');
+  });
+});
+
+describe('groupRouteByPlace — 사진을 장소 단위로 묶기', () => {
+  const cafe = { lat: 36.3277, lng: 127.4273 };
+  const park = { lat: 36.35, lng: 127.38 };
+
+  it('기본 이름("장소 n")과 직접 붙인 이름을 구분한다', () => {
+    expect(isDefaultPlaceName('장소 3')).toBe(true);
+    expect(isDefaultPlaceName('')).toBe(true);
+    expect(isDefaultPlaceName(undefined)).toBe(true);
+    expect(isDefaultPlaceName('성심당')).toBe(false);
+    expect(isDefaultPlaceName('장소 3 근처')).toBe(false);
+  });
+
+  it('좌표가 같은 연속한 사진은 한 장소다', () => {
+    const route = [
+      { ...cafe, name: '장소 1' },
+      { ...cafe, name: '장소 2' },
+      { ...park, name: '장소 3' }
+    ];
+    const groups = groupRouteByPlace(route);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].spots).toHaveLength(2);
+    expect(groups[0].indexes).toEqual([0, 1]);
+    expect(groups[1].indexes).toEqual([2]);
+    expect(countPlaces(route)).toBe(2);
+  });
+
+  it('묶인 사진 중 하나에만 이름을 붙였으면 그 이름이 장소 이름이 된다', () => {
+    const groups = groupRouteByPlace([
+      { ...cafe, name: '장소 1' },
+      { ...cafe, name: '성심당' }
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe('성심당');
+  });
+
+  it('같은 좌표라도 서로 다른 이름을 직접 붙였으면 묶지 않는다', () => {
+    const groups = groupRouteByPlace([
+      { ...cafe, name: '바버샵' },
+      { ...cafe, name: '볼링장' }
+    ]);
+    expect(groups.map((g) => g.name)).toEqual(['바버샵', '볼링장']);
+  });
+
+  it('같은 곳을 다시 들르면 따로 센다 (연속한 경우만 묶는다)', () => {
+    const route = [{ ...cafe, name: '숙소' }, { ...park, name: '공원' }, { ...cafe, name: '숙소' }];
+    expect(countPlaces(route)).toBe(3);
+  });
+
+  it('좌표가 없는 지점은 서로 묶지 않는다', () => {
+    const route = [
+      { lat: null, lng: null, name: '장소 1' },
+      { lat: null, lng: null, name: '장소 2' }
+    ];
+    expect(countPlaces(route)).toBe(2);
+  });
+
+  it('배열이 아니면 빈 배열이다', () => {
+    expect(groupRouteByPlace(null)).toEqual([]);
+    expect(countPlaces(undefined)).toBe(0);
   });
 });
 
@@ -259,6 +417,15 @@ describe('여행 날짜 — 사진 촬영 시각에서 뽑는다', () => {
     expect(sorted[0]).toBe(octoberTripPostedEarlier);
   });
 
+  it('촬영 시각 대신 파일 날짜가 들어간 사진은 여행 날짜 계산에서 뺀다', () => {
+    const downloaded = { timestamp: at(2026, 11, 14), timeEstimated: true };
+    const real = { timestamp: at(2026, 8, 14) };
+    expect(getShotTime(downloaded)).toBe(0);
+    expect(getShotTime(real)).toBe(at(2026, 8, 14));
+    expect(formatTripDate([downloaded, real])).toBe('2026.08.14');
+    expect(formatTripDate([downloaded])).toBe('');
+  });
+
   it('촬영 시각이 없는 예전 글은 게시 시각으로 정렬한다', () => {
     expect(getTripSortTime({ createdAt: at(2026, 5, 1), route: [{ name: '장소' }] })).toBe(at(2026, 5, 1));
     expect(getTripSortTime({ createdAt: at(2026, 5, 1) })).toBe(at(2026, 5, 1));
@@ -313,6 +480,13 @@ describe('체류 시간 · 여행 일차', () => {
 
   it('자정을 사이에 둔 짧은 간격도 날짜가 바뀌면 세지 않는다', () => {
     expect(getStayMinutes({ timestamp: at(2024, 3, 28, 23, 50) }, { timestamp: at(2024, 3, 29, 0, 10) })).toBeNull();
+  });
+
+  it('파일 날짜로 대신한 사진이 끼어 있으면 머문 시간을 계산하지 않는다', () => {
+    const real = { timestamp: at(2024, 3, 28, 13, 0) };
+    const guessed = { timestamp: at(2024, 3, 28, 15, 0), timeEstimated: true };
+    expect(getStayMinutes(real, guessed)).toBeNull();
+    expect(getStayMinutes(guessed, real)).toBeNull();
   });
 
   it('촬영 시각이 없으면 계산하지 않는다', () => {

@@ -4,11 +4,13 @@ import { db } from '../firebase';
 import RouteMap from '../components/RouteMap';
 import {
   REGION_LABELS,
+  countPlaces,
   extractRegionsFromRoute,
   formatDateLabel,
   formatTripDate,
   getDistanceFromLatLonInKm,
   getTripSortTime,
+  groupRouteByPlace,
   toCoordinate
 } from '../data';
 
@@ -50,7 +52,7 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
 
     posts.forEach((post) => {
       const route = Array.isArray(post.route) ? post.route : [];
-      places += route.length;
+      places += countPlaces(route);
       extractRegionsFromRoute(route).forEach((r) => regions.add(r));
 
       for (let i = 0; i < route.length - 1; i += 1) {
@@ -197,7 +199,8 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
             <div style={{ padding: '0 20px' }}>
               {posts.map((post, idx) => {
                 const route = Array.isArray(post.route) ? post.route : [];
-                const places = route.map((spot) => spot?.name).filter(Boolean);
+                // 같은 장소에서 찍은 사진은 한 칸으로 묶어 보여준다.
+                const places = groupRouteByPlace(route).map((place) => place.name).filter(Boolean);
 
                 return (
                   <div key={post.id} className="timeline-item" style={{ display: 'flex', gap: '14px' }}>
