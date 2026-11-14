@@ -6,8 +6,9 @@ import {
   REGION_LABELS,
   extractRegionsFromRoute,
   formatDateLabel,
+  formatTripDate,
   getDistanceFromLatLonInKm,
-  getTimestampValue,
+  getTripSortTime,
   toCoordinate
 } from '../data';
 
@@ -27,7 +28,8 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
       q,
       (snapshot) => {
         const arr = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        arr.sort((a, b) => getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt));
+        // 발자취는 여행 이력이므로 올린 순서가 아니라 다녀온 순서(최근 여행이 위)로 늘어놓는다.
+        arr.sort((a, b) => getTripSortTime(b) - getTripSortTime(a));
         setPosts(arr);
         setIsLoading(false);
       },
@@ -218,7 +220,8 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
                       style={{ flex: 1, paddingBottom: '22px', cursor: onOpenModal ? 'pointer' : 'default' }}
                     >
                       <div style={{ fontSize: '12px', color: '#868E96', marginBottom: '4px' }}>
-                        {formatDateLabel(post.createdAt)}
+                        {/* 촬영 시각이 없는 예전 글만 게시일로 대신하고, 그 사실을 밝힌다. */}
+                        {formatTripDate(route) || `${formatDateLabel(post.createdAt)} 게시`}
                       </div>
                       <div style={{ fontSize: '15px', fontWeight: 800, color: '#1A1A1A', marginBottom: '8px' }}>
                         {post.title || '제목 없는 여행기'}
