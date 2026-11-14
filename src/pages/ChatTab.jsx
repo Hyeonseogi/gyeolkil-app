@@ -276,15 +276,17 @@ const ChatTab = ({ currentUser }) => {
         await deleteGatheringCascade(activeRoom.id);
         showToast('동행 모집이 취소되었습니다.');
       } else {
-        // 정원이 차서 마감됐던 모집도 한 명이 나가면 다시 모집 중이 된다.
-        await updateDoc(doc(db, 'gatherings', activeRoom.id), {
-          currentMembers: arrayRemove(currentUser.uid),
-          status: 'recruiting'
-        });
+        // 퇴장 안내를 먼저 남긴다. 보안 규칙상 메시지는 참여 중인 사람만 쓸 수 있어서,
+        // 멤버에서 빠진 뒤에 쓰면 거부되고 "나가기 실패"로 보인다.
         await addDoc(collection(db, 'gatherings', activeRoom.id, 'messages'), {
           text: `👋 ${currentUser.displayName || '여행자'}님이 퇴장하셨습니다.`,
           userId: 'system',
           createdAt: serverTimestamp()
+        });
+        // 정원이 차서 마감됐던 모집도 한 명이 나가면 다시 모집 중이 된다.
+        await updateDoc(doc(db, 'gatherings', activeRoom.id), {
+          currentMembers: arrayRemove(currentUser.uid),
+          status: 'recruiting'
         });
         showToast('동행 채팅방을 나갔습니다.');
       }

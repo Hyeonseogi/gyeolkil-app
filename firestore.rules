@@ -90,7 +90,11 @@ service cloud.firestore {
         return isSignedIn() && request.auth.uid in resource.data.members;
       }
 
-      allow read, update, delete: if isMember();
+      // 대화를 처음 시작할 때 앱은 "방이 이미 있는지" 먼저 조회한다.
+      // 아직 없는 방은 resource 가 null 이라 isMember() 로는 판정할 수 없으므로 따로 허용한다.
+      // (존재하지 않는 문서를 조회하는 것이라 새어 나갈 데이터가 없다)
+      allow get: if isSignedIn() && (resource == null || request.auth.uid in resource.data.members);
+      allow list, update, delete: if isMember();
       allow create: if isSignedIn() && request.auth.uid in request.resource.data.members;
 
       match /messages/{messageId} {
