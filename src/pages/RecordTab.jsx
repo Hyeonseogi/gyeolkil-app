@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef, useEffect, useCallback } from 'react';
+import { Fragment, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import exifr from 'exifr';
 import heic2any from 'heic2any';
 import RouteMap from '../components/RouteMap';
@@ -19,6 +19,7 @@ import {
 } from '../data';
 import { reverseGeocode, reverseGeocodeAll } from '../geocode';
 import {
+  buildPreviewPath,
   estimateTravelMinutes,
   isWalkableDistance,
   loadRoute,
@@ -136,7 +137,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
 
   // 2단계에서 구간별 실제 이동 시간을 미리 불러온다.
   // 결과는 routing 모듈이 기억하고(게시할 때 다시 쓴다), 여기서는 도착했다는 것만 알려 화면을 다시 그린다.
-  const [, setRouteTick] = useState(0);
+  const [routeTick, setRouteTick] = useState(0);
+
+  // 지도 선도 받아 둔 실제 경로로 그린다. (경로가 도착할 때와 사진 순서가 바뀔 때만 다시 만든다)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const previewPath = useMemo(() => buildPreviewPath(spots), [spots, routeTick]);
   useEffect(() => {
     if (step !== 2) return undefined;
 
@@ -597,7 +602,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
               <div className="record-step">
                 <h3 className="step-title">📍 장소 순서와 체류시간 확인</h3>
                 <div style={{ marginBottom: '16px' }}>
-                  <RouteMap route={spots} height="180px" />
+                  <RouteMap route={spots} detailedPath={previewPath} height="180px" />
                 </div>
 
                 <div className="photo-spots">
