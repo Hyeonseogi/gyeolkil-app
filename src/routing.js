@@ -1,4 +1,4 @@
-import { getDistanceFromLatLonInKm, getShotTime } from './utils';
+import { getDistanceFromLatLonInKm, getShotTime, hasLocation } from './utils';
 
 /**
  * 두 지점 사이의 이동수단·이동 시간·실제 경로.
@@ -169,4 +169,29 @@ export function loadRoute(start, end, mode, { retryFailed = false } = {}) {
     );
   }
   return inFlight.get(key);
+}
+
+/**
+ * 2단계 지도에 그릴 미리 보기 경로.
+ * 받아 둔 실제 경로가 있는 구간은 그 길을 따라, 아직 못 받았거나 실패한 구간은 두 점을 직선으로 잇는다.
+ * (게시할 때 저장하는 detailedPath 와 같은 규칙 — 같은 장소 사이는 건너뛴다)
+ */
+export function buildPreviewPath(spots) {
+  const path = [];
+  const list = Array.isArray(spots) ? spots : [];
+
+  for (let i = 0; i < list.length - 1; i += 1) {
+    const start = list[i];
+    const end = list[i + 1];
+    if (!hasLocation(start) || !hasLocation(end)) continue;
+    if (start.lat === end.lat && start.lng === end.lng) continue;
+
+    const route = peekRoute(start, end, resolveTransitMode(start, end));
+    if (Array.isArray(route?.path) && route.path.length > 1) {
+      route.path.forEach((point) => path.push(point));
+    } else {
+      path.push({ lat: start.lat, lng: start.lng }, { lat: end.lat, lng: end.lng });
+    }
+  }
+  return path;
 }

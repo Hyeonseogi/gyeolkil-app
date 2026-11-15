@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  buildPreviewPath,
   estimateTravelMinutes,
+  loadRoute,
   guessTransitMode,
   isWalkableDistance,
   parseCarRoute,
@@ -164,5 +166,51 @@ describe('경로 탐색 응답 해석', () => {
     expect(routeKey(a, b, 'walk')).not.toBe(routeKey(a, b, 'car'));
     expect(routeKey(a, b, 'walk')).not.toBe(routeKey(b, a, 'walk'));
     expect(routeKey(a, b, 'walk')).toBe(routeKey({ ...a }, { ...b }, 'walk'));
+  });
+});
+
+describe('buildPreviewPath — 2단계 지도에 그릴 경로', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('받아 둔 경로가 없으면 장소 사이를 직선으로 잇고, 같은 장소·위치 없는 사진은 건너뛴다', () => {
+    const spots = [
+      { lat: 35.1, lng: 129.01, timestamp: at(10) },
+      { lat: 35.1, lng: 129.01, timestamp: at(10, 10) },
+      { lat: 35.11, lng: 129.02, timestamp: at(11) },
+      { lat: null, lng: null, timestamp: at(12) }
+    ];
+    expect(buildPreviewPath(spots)).toEqual([
+      { lat: 35.1, lng: 129.01 },
+      { lat: 35.11, lng: 129.02 }
+    ]);
+  });
+
+  it('받아 둔 실제 경로가 있으면 그 길을 따라 그린다', async () => {
+    const start = { lat: 35.2, lng: 129.05, timestamp: at(9) };
+    const end = { lat: 35.205, lng: 129.055, timestamp: at(9, 30) };
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        features: [
+          { geometry: { type: 'Point', coordinates: [129.05, 35.2] }, properties: { totalTime: 600 } },
+          { geometry: { type: 'LineString', coordinates: [[129.05, 35.2], [129.052, 35.203], [129.055, 35.205]] } }
+        ]
+      })
+    })));
+
+    await loadRoute(start, end, resolveTransitMode(start, end));
+    expect(buildPreviewPath([start, end])).toEqual([
+      { lng: 129.05, lat: 35.2 },
+      { lng: 129.05, lat: 35.2 },
+      { lng: 129.052, lat: 35.203 },
+      { lng: 129.055, lat: 35.205 }
+    ]);
+  });
+
+  it('빈 목록이나 잘못된 값이면 빈 경로', () => {
+    expect(buildPreviewPath([])).toEqual([]);
+    expect(buildPreviewPath(null)).toEqual([]);
   });
 });
