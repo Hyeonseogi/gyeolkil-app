@@ -73,6 +73,20 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
     [posts]
   );
 
+  // 여정마다 따로 그릴 선. 저장된 실제 경로가 있으면 그것을, 없는 예전 글만 지점끼리 직선으로 잇는다.
+  // (모든 여정의 지점을 한 줄로 이으면 서로 다른 여행 사이에도 선이 그어진다)
+  const footprintPaths = useMemo(
+    () =>
+      posts.map((post) =>
+        Array.isArray(post.detailedPath) && post.detailedPath.length > 1
+          ? post.detailedPath
+          : (Array.isArray(post.route) ? post.route : []).filter(
+              (spot) => toCoordinate(spot?.lat) !== null && toCoordinate(spot?.lng) !== null
+            )
+      ),
+    [posts]
+  );
+
   const isEmpty = !isLoading && posts.length === 0;
 
   return (
@@ -137,7 +151,7 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
         {/* 전체 발자취 지도 */}
         <div style={{ margin: '0 20px 12px' }}>
           {allSpots.length > 0 ? (
-            <RouteMap route={allSpots} height="220px" />
+            <RouteMap route={allSpots} paths={footprintPaths} height="220px" />
           ) : (
             <div
               style={{

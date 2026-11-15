@@ -61,7 +61,19 @@ const useKakaoReady = () => {
   return ready;
 };
 
-const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260px', highlightIndex = null }) => {
+/** 좌표 배열을 지도에 그릴 수 있는 숫자 좌표만 남겨 정리 */
+const toPolylinePoints = (points) =>
+  (Array.isArray(points) ? points : [])
+    .map((p) => ({ lat: Number(p?.lat), lng: Number(p?.lng) }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+/**
+ * route: 핀을 찍을 지점들
+ * detailedPath: 실제 이동 경로 좌표 (없으면 지점들을 직선으로 잇는다)
+ * paths: 서로 이어지지 않는 경로 여러 개 (내 발자취처럼 여정 여러 개를 한 지도에 그릴 때).
+ *        주면 detailedPath 대신 이것을 그린다. 여정 사이를 선으로 잇지 않기 위해 따로 받는다.
+ */
+const RouteMap = ({ route = [], detailedPath = [], paths = null, width = '100%', height = '260px', highlightIndex = null }) => {
   const [map, setMap] = useState(null);
   const kakaoReady = useKakaoReady();
 
@@ -79,12 +91,13 @@ const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260
   // 같은 장소의 사진들은 좌표가 같아서, 따로 찍으면 핀이 겹쳐 번호 하나만 보인다.
   const places = useMemo(() => groupRouteByPlace(validRoute), [validRoute]);
 
-  const polylinePath = useMemo(() => {
+  // 그릴 선들 — 각각이 따로 끊긴 선이다.
+  const polylinePaths = useMemo(() => {
+    if (Array.isArray(paths)) return paths.map(toPolylinePoints).filter((line) => line.length > 1);
     const source = Array.isArray(detailedPath) && detailedPath.length > 0 ? detailedPath : validRoute;
-    return source
-      .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }))
-      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-  }, [detailedPath, validRoute]);
+    const line = toPolylinePoints(source);
+    return line.length > 1 ? [line] : [];
+  }, [paths, detailedPath, validRoute]);
 
   // 경로 전체가 한눈에 들어오도록 지도 범위를 맞춘다. (경로가 바뀔 때만)
   useEffect(() => {
@@ -128,9 +141,9 @@ const RouteMap = ({ route = [], detailedPath = [], width = '100%', height = '260
       disableDoubleClickZoom={false}
     >
       {/* 경로 선 그리기 */}
-      {polylinePath.length > 1 && (
+      {polylinePaths.length > 0 && (
         <Polyline
-          path={[polylinePath]}
+          path={polylinePaths}
           strokeWeight={4}
           strokeColor="#52B788" // 곁길 테마 컬러
           strokeOpacity={0.8}
