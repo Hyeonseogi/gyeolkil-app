@@ -33,6 +33,8 @@ import {
   getStayMinutes,
   groupRouteByPlace,
   getTimestampValue,
+  hasLocation,
+  kakaoDirectionsUrl,
   showToast
 } from '../data';
 
@@ -136,7 +138,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
   const handleToggleLike = async () => {
     if (!currentUser) {
-      showToast('좋아요를 누르려면 로그인이 필요합니다. 🔒', 'error');
+      showToast('좋아요를 누르려면 로그인이 필요합니다.', 'error');
       return;
     }
     if (!post) return;
@@ -169,7 +171,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
   const handleToggleSave = async () => {
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
     if (!post) return;
@@ -429,23 +431,24 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
           position: 'relative'
         }}
       >
-        <div className="modal-drag-handle" style={{ width: '40px', height: '4px', backgroundColor: '#E5E7EB', borderRadius: '2px', margin: '12px auto 4px' }}></div>
+        <div className="modal-drag-handle" style={{ width: '40px', height: '4px', backgroundColor: 'var(--line)', borderRadius: '2px', margin: '12px auto 4px' }}></div>
         <button
           onClick={onClose}
           aria-label="닫기"
-          style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '20px', color: '#ADB5BD', cursor: 'pointer', zIndex: 10 }}
+          style={{ position: 'absolute', top: '14px', right: '8px', width: '44px', height: '44px', background: 'none', border: 'none', fontSize: '20px', color: 'var(--text-muted)', cursor: 'pointer', zIndex: 10 }}
         >
           <i className="fas fa-times"></i>
         </button>
 
         {isLoading ? (
           <div className="loading-spinner" style={{ padding: '80px 0', textAlign: 'center', color: '#888' }}>
-            상세 내용을 불러오는 중... 🧭
+            상세 내용을 불러오는 중...
           </div>
         ) : post ? (
           <div className="modal-scroll-container" style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
             {/* 작성자 */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: '12px', justifyContent: 'space-between' }}>
+            {/* 오른쪽 위 닫기(X) 버튼과 겹치지 않게 오른쪽 여백을 비워 둔다 */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '12px 56px 12px 16px', gap: '12px', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, overflow: 'hidden' }}>
                 <img
                   src={userAvatar}
@@ -460,13 +463,13 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                   <div
                     role="button"
                     tabIndex={0}
-                    style={{ fontWeight: 'bold', fontSize: '14px', color: '#1A1A1A', cursor: 'pointer' }}
+                    style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--ink)', cursor: 'pointer' }}
                     onClick={() => onOpenUser && onOpenUser(post.userId)}
                     onKeyDown={(e) => e.key === 'Enter' && onOpenUser && onOpenUser(post.userId)}
                   >
                     {userName}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#ADB5BD', marginTop: '2px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '2px' }}>
                     {formatTime(post.createdAt)}
                     {regionLabel ? ` · ${regionLabel}` : ''}
                   </div>
@@ -477,7 +480,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                 {isMyPost ? (
                   <button
                     onClick={handleDeletePost}
-                    style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#ffe3e3', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                    style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: 'var(--danger-tint)', color: 'var(--danger)', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
                   >
                     <i className="fas fa-trash-alt" style={{ marginRight: '4px' }}></i>삭제
                   </button>
@@ -487,9 +490,9 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                     style={{
                       padding: '6px 14px',
                       borderRadius: '20px',
-                      border: isFollowingAuthor ? '1px solid #DEE2E6' : '1px solid #1A1A1A',
-                      background: isFollowingAuthor ? '#F1F3F5' : 'transparent',
-                      color: isFollowingAuthor ? '#495057' : '#1A1A1A',
+                      border: isFollowingAuthor ? '1px solid var(--line)' : '1px solid var(--primary)',
+                      background: isFollowingAuthor ? 'var(--surface-2)' : 'var(--primary)',
+                      color: isFollowingAuthor ? 'var(--text-sub)' : '#fff',
                       fontSize: '12px',
                       fontWeight: 'bold',
                       cursor: 'pointer'
@@ -502,24 +505,24 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
             </div>
 
             {/* 경로 지도 */}
-            <div style={{ borderBottom: '1px solid #F1F3F5' }}>
+            <div style={{ borderBottom: '1px solid var(--line)' }}>
               <RouteMap route={post.route} detailedPath={post.detailedPath} height="220px" highlightIndex={highlightIndex} />
             </div>
 
             {/* 본문 */}
             <div style={{ padding: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', marginBottom: '8px' }}>{post.title}</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', marginBottom: '8px' }}>{post.title}</h2>
               {/* 위쪽 작성자 줄의 시간은 "올린 때"이고, 이 줄은 사진에서 읽은 "다녀온 때"다. */}
               {tripDate && (
-                <div style={{ fontSize: '12px', fontWeight: '600', color: '#2D6A4F', marginBottom: '8px' }}>
-                  🗓 {tripDate} 여행
+                <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--primary)', marginBottom: '8px' }}>
+                  <i className="fa-regular fa-calendar ico" aria-hidden="true"></i>{tripDate} 여행
                 </div>
               )}
-              <div style={{ fontSize: '14px', color: '#495057', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{post.body}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-sub)', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{post.body}</div>
               {post.tags?.length > 0 && (
                 <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   {post.tags.map((tag, idx) => (
-                    <span key={`${tag}-${idx}`} style={{ color: '#52B788', fontSize: '12px', fontWeight: '600' }}>
+                    <span key={`${tag}-${idx}`} style={{ color: 'var(--primary)', fontSize: '12px', fontWeight: '600' }}>
                       #{tag}
                     </span>
                   ))}
@@ -529,7 +532,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
             {/* 사진 */}
             {photoSpots.length > 0 && (
-              <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', backgroundColor: '#F8F9FA', overflow: 'hidden', borderTop: '1px solid #F1F3F5' }}>
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', backgroundColor: 'var(--surface-2)', overflow: 'hidden', borderTop: '1px solid var(--line)' }}>
                 <div
                   className="modal-photos-scroll"
                   onScroll={handlePhotoScroll}
@@ -605,8 +608,8 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
 
             {/* 여정 타임라인 */}
             {post.route?.length > 0 && (
-              <div style={{ padding: '20px 16px', borderTop: '8px solid #F1F3F5', backgroundColor: '#fff' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#1A1A1A', marginBottom: '16px' }}>⏱️ 여정 타임라인</h3>
+              <div style={{ padding: '20px 16px', borderTop: '8px solid var(--line)', backgroundColor: '#fff' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--ink)', marginBottom: '12px' }}>여정 타임라인</h3>
 
                 {places.map((place, i) => {
                   const nextPlace = places[i + 1];
@@ -629,63 +632,86 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                     <div key={place.indexes[0]} style={{ display: 'flex', flexDirection: 'column' }}>
                       {showDayLabel && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: i === 0 ? '0 0 6px' : '10px 0 6px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '800', color: '#2D6A4F', whiteSpace: 'nowrap' }}>{dayLabel}</span>
-                          <div style={{ flex: 1, height: '1px', backgroundColor: '#D8F3DC' }}></div>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--primary)', whiteSpace: 'nowrap' }}>{dayLabel}</span>
+                          <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--tint)' }}></div>
                         </div>
                       )}
                       <div
                         style={{
                           display: 'flex',
-                          gap: '14px',
+                          alignItems: 'center',
+                          gap: '12px',
                           padding: '10px 8px',
                           borderRadius: '12px',
-                          backgroundColor: isCurrent ? '#F1F9F5' : 'transparent',
+                          backgroundColor: isCurrent ? 'var(--tint)' : 'transparent',
                           transition: 'all 0.2s'
                         }}
                       >
                         <div
                           style={{
-                            width: '22px',
-                            height: '22px',
+                            width: '26px',
+                            height: '26px',
                             borderRadius: '50%',
-                            backgroundColor: isCurrent ? '#52B788' : '#ADB5BD',
+                            backgroundColor: 'var(--primary)',
                             color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            flexShrink: 0,
-                            marginTop: '2px'
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            flexShrink: 0
                           }}
                         >
                           {i + 1}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 'bold', fontSize: '14px', color: isCurrent ? '#2D6A4F' : '#1A1A1A' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: isCurrent ? 'var(--primary)' : 'var(--ink)' }}>
                             {place.name || '이름 없는 장소'}
                             {place.spots.length > 1 && (
-                              <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', color: '#868E96' }}>
-                                📷 사진 {place.spots.length}장
+                              <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>
+                                <i className="fa-solid fa-camera ico" aria-hidden="true"></i>사진 {place.spots.length}장
                               </span>
                             )}
                           </div>
                           {stayTimeMins > 0 && (
-                            <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
-                              ☕ 약 <strong>{formatDuration(stayTimeMins)}</strong> 머무름
+                            <div style={{ fontSize: '13px', color: 'var(--text-sub)', marginTop: '2px' }}>
+                              <i className="fa-regular fa-clock ico" aria-hidden="true"></i>약 <strong>{formatDuration(stayTimeMins)}</strong> 머무름
                             </div>
                           )}
                         </div>
+                        {hasLocation(firstSpot) && (
+                          <a
+                            href={kakaoDirectionsUrl(place.name, firstSpot.lat, firstSpot.lng)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${place.name || '이 장소'} 길찾기 (카카오맵)`}
+                            style={{
+                              flexShrink: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              height: '34px',
+                              padding: '0 12px',
+                              borderRadius: '17px',
+                              background: 'var(--tint)',
+                              color: 'var(--tint-ink)',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <i className="fa-solid fa-diamond-turn-right ico" aria-hidden="true"></i>길찾기
+                          </a>
+                        )}
                       </div>
 
                       {nextPlace && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px 0 2px 18px' }}>
-                          <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
-                          <div style={{ background: '#F3F4F6', color: '#4B5563', padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', margin: '2px 0', whiteSpace: 'nowrap' }}>
-                            {lastSpot.transitType === 'walk' ? '🚶 도보' : '🚗 차량'} 이동
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', margin: '0 0 0 20px' }}>
+                          <div style={{ width: '2px', height: '10px', backgroundColor: 'var(--line)' }}></div>
+                          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text-sub)', padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 500, margin: '2px 0 2px 16px', whiteSpace: 'nowrap' }}>
+                            <i className={lastSpot.transitType === 'walk' ? 'fa-solid fa-person-walking ico' : 'fa-solid fa-car ico'} aria-hidden="true"></i>{lastSpot.transitType === 'walk' ? '도보' : '차량'} 이동
                             {lastSpot.travelTimeToNext ? ` (약 ${formatDuration(lastSpot.travelTimeToNext)})` : ''}
                           </div>
-                          <div style={{ width: '2px', height: '10px', backgroundColor: '#E5E7EB' }}></div>
+                          <div style={{ width: '2px', height: '10px', backgroundColor: 'var(--line)' }}></div>
                         </div>
                       )}
                     </div>
@@ -695,17 +721,17 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
             )}
 
             {/* 액션 */}
-            <div style={{ display: 'flex', gap: '20px', padding: '16px', borderTop: '1px solid #F1F3F5' }}>
+            <div style={{ display: 'flex', gap: '20px', padding: '16px', borderTop: '1px solid var(--line)' }}>
               <button
                 onClick={handleToggleLike}
                 aria-label={isLiked ? '좋아요 취소' : '좋아요'}
                 aria-pressed={isLiked}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <i className={isLiked ? 'fas fa-heart' : 'far fa-heart'} style={{ color: isLiked ? '#e63946' : '#495057' }}></i> {likeCount}
+                <i className={isLiked ? 'fas fa-heart' : 'far fa-heart'} style={{ color: isLiked ? 'var(--danger)' : 'var(--text-sub)' }}></i> {likeCount}
               </button>
 
-              <div style={{ fontSize: '16px', color: '#495057', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '16px', color: 'var(--text-sub)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <i className="far fa-comment"></i> {comments.length}
               </div>
 
@@ -713,9 +739,9 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                 onClick={handleToggleSave}
                 aria-label={isSaved ? '저장 취소' : '저장'}
                 aria-pressed={isSaved}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#495057', display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-sub)', display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}
               >
-                <i className={isSaved ? 'fas fa-bookmark' : 'far fa-bookmark'} style={{ color: isSaved ? '#2B8A3E' : '#495057' }}></i>{' '}
+                <i className={isSaved ? 'fas fa-bookmark' : 'far fa-bookmark'} style={{ color: isSaved ? 'var(--primary)' : 'var(--text-sub)' }}></i>{' '}
                 {getSaveCount(post)}
               </button>
             </div>
@@ -725,7 +751,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
               <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>댓글 {comments.length}개</h3>
 
               {comments.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#ADB5BD', textAlign: 'center', padding: '20px 0', margin: 0 }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-faint)', textAlign: 'center', padding: '20px 0', margin: 0 }}>
                   첫 번째 댓글을 남겨보세요!
                 </p>
               ) : (
@@ -744,24 +770,24 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{comment.authorName}</span>
-                            <span style={{ fontSize: '11px', color: '#ADB5BD' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
                               {/* 서버 시각이 아직 반영되지 않았으면 '방금 전' 으로 보인다 */}
                               {getTimestampValue(comment.createdAt) ? formatTime(comment.createdAt) : '방금 전'}
                             </span>
                           </div>
-                          <div style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{comment.text}</div>
+                          <div style={{ fontSize: '14px', color: 'var(--ink)', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{comment.text}</div>
 
                           <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
                             <button
                               onClick={() => setReplyingTo({ commentId: comment.id, authorName: comment.authorName, userId: comment.userId })}
-                              style={{ background: 'none', border: 'none', color: '#ADB5BD', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
                             >
                               답글 달기
                             </button>
                             {currentUser?.uid === comment.userId && (
                               <button
                                 onClick={() => handleDeleteComment(comment.id)}
-                                style={{ background: 'none', border: 'none', color: '#e63946', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
                               >
                                 삭제
                               </button>
@@ -785,14 +811,14 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                               <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                                   <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{reply.authorName}</span>
-                                  <span style={{ fontSize: '11px', color: '#ADB5BD' }}>{formatTime(reply.createdAt)}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{formatTime(reply.createdAt)}</span>
                                 </div>
-                                <div style={{ fontSize: '13px', color: '#1A1A1A', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{reply.text}</div>
+                                <div style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{reply.text}</div>
                                 {currentUser?.uid === reply.userId && (
                                   <div style={{ marginTop: '4px' }}>
                                     <button
                                       onClick={() => handleDeleteReply(comment.id, reply)}
-                                      style={{ background: 'none', border: 'none', color: '#e63946', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                      style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
                                     >
                                       삭제
                                     </button>
@@ -819,17 +845,17 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
         {post && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {replyingTo && (
-              <div style={{ width: '100%', padding: '8px 16px', backgroundColor: '#F1F3F5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#495057' }}>
+              <div style={{ width: '100%', padding: '8px 16px', backgroundColor: 'var(--surface-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-sub)' }}>
                 <span>
                   <strong>{replyingTo.authorName}</strong>님에게 답글 남기는 중...
                 </span>
-                <button onClick={() => setReplyingTo(null)} aria-label="답글 취소" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ADB5BD' }}>
+                <button onClick={() => setReplyingTo(null)} aria-label="답글 취소" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)' }}>
                   <i className="fas fa-times"></i>
                 </button>
               </div>
             )}
 
-            <div style={{ padding: '12px 16px', borderTop: '1px solid #F1F3F5', backgroundColor: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', backgroundColor: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <img
                 src={currentUser?.photoURL || FALLBACK_AVATAR}
                 alt=""
@@ -846,7 +872,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                 maxLength={300}
                 onChange={(e) => setCommentInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                style={{ flex: 1, border: 'none', background: '#F8F9FA', borderRadius: '20px', padding: '10px 14px', outline: 'none', fontSize: '13px' }}
+                style={{ flex: 1, border: 'none', background: 'var(--surface-2)', borderRadius: '20px', padding: '10px 14px', outline: 'none', fontSize: '13px' }}
               />
               <button
                 onClick={handleAddComment}
@@ -855,7 +881,7 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: commentInput.trim() ? '#52B788' : '#ADB5BD',
+                  color: commentInput.trim() ? 'var(--primary)' : 'var(--text-faint)',
                   cursor: commentInput.trim() ? 'pointer' : 'default',
                   fontSize: '16px',
                   padding: '0 8px'

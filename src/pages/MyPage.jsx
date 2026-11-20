@@ -91,7 +91,7 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
       {/* 상단 프로필 영역 (타인 프로필 페이지와 동일한 레이아웃) */}
       <div style={{ padding: '24px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, #52B788, #b7e4c7)' }}>
+          <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, var(--primary), var(--tint-strong))' }}>
             <img
               src={currentUser?.photoURL || userData?.photoURL || FALLBACK_AVATAR}
               alt="내 프로필"
@@ -109,19 +109,19 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
               { value: userData?.following?.length || 0, label: '팔로잉' }
             ].map((stat) => (
               <div key={stat.label}>
-                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{stat.value}</div>
-                <div style={{ fontSize: '13px', color: '#495057' }}>{stat.label}</div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)' }}>{stat.value}</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-sub)' }}>{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div>
-          <h1 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: '#1A1A1A' }}>
+          <h1 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--ink)' }}>
             {currentUser?.displayName || userData?.displayName || '여행자'}
           </h1>
-          <p style={{ color: '#495057', fontSize: '14px', lineHeight: '1.4', margin: 0 }}>
-            {userData?.bio || '여행 기록을 남기는 중 ✈️'}
+          <p style={{ color: 'var(--text-sub)', fontSize: '14px', lineHeight: '1.4', margin: 0 }}>
+            {userData?.bio || '여행 기록을 남기는 중'}
           </p>
         </div>
 
@@ -132,7 +132,7 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
               flex: 1,
               padding: '8px',
               borderRadius: '8px',
-              border: '1px solid #E1E4E6',
+              border: '1px solid var(--line)',
               backgroundColor: '#fff',
               fontWeight: '500',
               fontSize: '13px',
@@ -148,14 +148,14 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
               padding: '8px',
               borderRadius: '8px',
               border: 'none',
-              background: '#EBFBEE',
+              background: 'var(--tint)',
               fontSize: '13px',
               fontWeight: 'bold',
-              color: '#2B8A3E',
+              color: 'var(--primary)',
               cursor: 'pointer'
             }}
           >
-            📍 방문 장소 {totalPlaces}곳
+            <i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>방문 장소 {totalPlaces}곳
           </button>
         </div>
       </div>
@@ -164,7 +164,7 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
       <div
         style={{
           display: 'flex',
-          borderBottom: '1px solid #F1F3F5',
+          borderBottom: '1px solid var(--line)',
           position: 'sticky',
           top: 0,
           backgroundColor: '#fff',
@@ -183,8 +183,8 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
               border: 'none',
               background: 'none',
               cursor: 'pointer',
-              color: activeTab === tab.key ? '#1A1A1A' : '#ADB5BD',
-              borderBottom: activeTab === tab.key ? '2px solid #1A1A1A' : '2px solid transparent',
+              color: activeTab === tab.key ? 'var(--ink)' : 'var(--text-faint)',
+              borderBottom: activeTab === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
               fontSize: '18px',
               transition: 'all 0.2s'
             }}
@@ -197,8 +197,8 @@ const MyPage = ({ currentUser, onOpenModal, onNavigate }) => {
       {/* 썸네일 그리드 */}
       <div style={{ paddingBottom: '80px' }}>
         {isTabLoading ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#ADB5BD', fontSize: '14px' }}>
-            불러오는 중... 🧭
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '14px' }}>
+            불러오는 중...
           </div>
         ) : (
           <PostGrid posts={visiblePosts} onOpenModal={onOpenModal} />

@@ -15,7 +15,7 @@ const rowStyle = {
   cursor: 'pointer',
   fontSize: '15px',
   fontWeight: 'bold',
-  color: '#1A1A1A',
+  color: 'var(--ink)',
   transition: 'background 0.2s'
 };
 
@@ -88,7 +88,7 @@ const SettingsPage = ({ onClose }) => {
           backdropFilter: 'blur(8px)',
           zIndex: 10,
           padding: '16px 20px',
-          borderBottom: '1px solid #F1F3F5',
+          borderBottom: '1px solid var(--line)',
           display: 'flex',
           alignItems: 'center'
         }}
@@ -97,75 +97,75 @@ const SettingsPage = ({ onClose }) => {
           <button
             onClick={onClose}
             aria-label="뒤로 가기"
-            style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}
+            style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--ink)', cursor: 'pointer', marginRight: '16px' }}
           >
             <i className="fas fa-arrow-left"></i>
           </button>
         )}
-        <span style={{ fontWeight: '800', fontSize: '18px', color: '#1A1A1A' }}>설정</span>
+        <span style={{ fontWeight: '800', fontSize: '18px', color: 'var(--ink)' }}>설정</span>
       </div>
 
       <div style={{ padding: '24px 20px 100px' }}>
         {/* 계정 관리 */}
-        <h3 style={{ fontSize: '13px', color: '#ADB5BD', fontWeight: 'bold', marginBottom: '8px', paddingLeft: '8px' }}>계정 관리</h3>
-        <div style={{ background: '#f8f9fa', borderRadius: '16px', overflow: 'hidden', marginBottom: '24px' }}>
+        <h3 style={{ fontSize: '13px', color: 'var(--text-faint)', fontWeight: 'bold', marginBottom: '8px', paddingLeft: '8px' }}>계정 관리</h3>
+        <div style={{ background: 'var(--surface-2)', borderRadius: '16px', overflow: 'hidden', marginBottom: '24px' }}>
           <button
             onClick={handleLogout}
-            style={{ ...rowStyle, borderBottom: '1px solid #e9ecef' }}
+            style={{ ...rowStyle, borderBottom: '1px solid var(--line)' }}
             onMouseOver={(e) => {
-              e.currentTarget.style.background = '#f1f3f5';
+              e.currentTarget.style.background = 'var(--surface-2)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.background = 'transparent';
             }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <i className="fas fa-sign-out-alt" style={{ color: '#ADB5BD', width: '20px' }}></i>
+              <i className="fas fa-sign-out-alt" style={{ color: 'var(--text-faint)', width: '20px' }}></i>
               로그아웃
             </span>
-            <i className="fas fa-chevron-right" style={{ color: '#DEE2E6', fontSize: '14px' }}></i>
+            <i className="fas fa-chevron-right" style={{ color: 'var(--line)', fontSize: '14px' }}></i>
           </button>
 
           <button
             onClick={handleDeleteAccount}
             disabled={isDeleting}
-            style={{ ...rowStyle, color: '#e63946', cursor: isDeleting ? 'wait' : 'pointer' }}
+            style={{ ...rowStyle, color: 'var(--danger)', cursor: isDeleting ? 'wait' : 'pointer' }}
             onMouseOver={(e) => {
-              e.currentTarget.style.background = '#ffe3e3';
+              e.currentTarget.style.background = 'var(--danger-tint)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.background = 'transparent';
             }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <i className="fas fa-user-slash" style={{ color: '#e63946', width: '20px' }}></i>
+              <i className="fas fa-user-slash" style={{ color: 'var(--danger)', width: '20px' }}></i>
               {isDeleting ? deleteProgress || '탈퇴 처리 중...' : '회원탈퇴'}
             </span>
-            <i className="fas fa-chevron-right" style={{ color: '#DEE2E6', fontSize: '14px' }}></i>
+            <i className="fas fa-chevron-right" style={{ color: 'var(--line)', fontSize: '14px' }}></i>
           </button>
         </div>
 
         {/* 앱 정보 */}
-        <h3 style={{ fontSize: '13px', color: '#ADB5BD', fontWeight: 'bold', marginBottom: '8px', paddingLeft: '8px' }}>앱 정보</h3>
-        <div style={{ background: '#f8f9fa', borderRadius: '16px', overflow: 'hidden' }}>
-          <div style={{ ...rowStyle, cursor: 'default', borderBottom: '1px solid #e9ecef' }}>
+        <h3 style={{ fontSize: '13px', color: 'var(--text-faint)', fontWeight: 'bold', marginBottom: '8px', paddingLeft: '8px' }}>앱 정보</h3>
+        <div style={{ background: 'var(--surface-2)', borderRadius: '16px', overflow: 'hidden' }}>
+          <div style={{ ...rowStyle, cursor: 'default', borderBottom: '1px solid var(--line)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <i className="fas fa-info-circle" style={{ color: '#ADB5BD', width: '20px' }}></i>
+              <i className="fas fa-info-circle" style={{ color: 'var(--text-faint)', width: '20px' }}></i>
               버전 정보
             </span>
-            <span style={{ color: '#ADB5BD', fontSize: '14px', fontWeight: 400 }}>v1.0.0</span>
+            <span style={{ color: 'var(--text-faint)', fontSize: '14px', fontWeight: 400 }}>v1.0.0</span>
           </div>
 
           <button onClick={() => setIsPolicyOpen((prev) => !prev)} style={rowStyle} aria-expanded={isPolicyOpen}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <i className="fas fa-file-alt" style={{ color: '#ADB5BD', width: '20px' }}></i>
+              <i className="fas fa-file-alt" style={{ color: 'var(--text-faint)', width: '20px' }}></i>
               이용약관 및 개인정보처리방침
             </span>
-            <i className={`fas fa-chevron-${isPolicyOpen ? 'down' : 'right'}`} style={{ color: '#DEE2E6', fontSize: '14px' }}></i>
+            <i className={`fas fa-chevron-${isPolicyOpen ? 'down' : 'right'}`} style={{ color: 'var(--line)', fontSize: '14px' }}></i>
           </button>
 
           {isPolicyOpen && (
-            <div style={{ padding: '4px 20px 20px', fontSize: '13px', color: '#495057', lineHeight: 1.7 }}>
+            <div style={{ padding: '4px 20px 20px', fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.7 }}>
               <p style={{ marginTop: 0 }}>
                 <strong>수집하는 정보</strong>
                 <br />
@@ -183,7 +183,7 @@ const SettingsPage = ({ onClose }) => {
                 회원 탈퇴 시 프로필, 작성한 여정과 사진, 동행 모집, 채팅, 알림이 즉시 삭제됩니다.
                 다른 사람의 글에 남긴 댓글은 남습니다. 위치 권한은 브라우저 설정에서 언제든 철회할 수 있습니다.
               </p>
-              <p style={{ marginBottom: 0, color: '#868E96' }}>
+              <p style={{ marginBottom: 0, color: 'var(--text-muted)' }}>
                 본 문서는 교내 학술제 출품용 시연 서비스 기준으로 작성되었습니다.
               </p>
             </div>

@@ -96,7 +96,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
       const next = await putDraft({ id, title, body, companion, tags, spots: draftSpots, savedAt: Date.now() });
       setDrafts(next);
       setCurrentDraftId(id);
-      showToast('사진까지 함께 기기에 임시저장했습니다. 💾', 'success');
+      showToast('사진까지 함께 기기에 임시저장했습니다.', 'success');
     } catch (error) {
       console.error('임시저장 실패:', error);
       showToast('임시저장에 실패했습니다. 기기 저장 공간을 확인해주세요.', 'error');
@@ -199,7 +199,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
       return;
     }
 
-    showToast('현재 위치를 찾고 있습니다... 📡');
+    showToast('현재 위치를 찾고 있습니다...');
     navigator.geolocation.getCurrentPosition(
       (position) => addSpot(position.coords.latitude, position.coords.longitude),
       addSpotWithoutLocation,
@@ -320,7 +320,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
       })
     );
     setLocatingIndex(null);
-    showToast('장소를 지정했습니다. 📍', 'success');
+    showToast('장소를 지정했습니다.', 'success');
     // 시도는 항상 새로 찾고, 이름은 아직 정해지지 않았을 때만 채운다.
     if (target?.file) fillPlaceInfo(target.file, lat, lng);
   };
@@ -475,7 +475,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
         commentedUserIds: []
       });
 
-      showToast('여정이 성공적으로 등록되었습니다! 🎉', 'success');
+      showToast('여정이 성공적으로 등록되었습니다!', 'success');
       setStep(1);
       setTitle('');
       setBody('');
@@ -503,7 +503,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
 
   return (
     <section className="tab-page active" style={{ overflowY: 'auto' }}>
-      <div className="record-page" style={{ paddingBottom: '90px' }}>
+      <div className="record-page" style={{ paddingBottom: 0 }}>
         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} style={{ display: 'none' }} onChange={handleCameraUpload} />
         <input type="file" multiple accept="image/*,.heic" ref={galleryInputRef} style={{ display: 'none' }} onChange={handleGalleryUpload} />
 
@@ -522,8 +522,8 @@ const RecordTab = ({ currentUser, onPublish }) => {
               gap: '14px'
             }}
           >
-            <i className="fas fa-compass fa-spin" style={{ fontSize: '32px', color: '#52B788' }}></i>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: '#2D6A4F' }}>
+            <i className="fas fa-compass fa-spin" style={{ fontSize: '32px', color: 'var(--primary)' }}></i>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary)' }}>
               {progress || '사진을 분석하는 중...'}
             </div>
           </div>
@@ -531,7 +531,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
 
         {showDraftsPanel ? (
           <div className="drafts-panel">
-            <h3 className="step-title">📝 임시 저장 목록</h3>
+            <h3 className="step-title"><i className="fa-regular fa-folder-open ico" aria-hidden="true"></i>임시 저장 목록</h3>
             {drafts.length === 0 ? (
               <div className="empty-state">
                 <p>임시 저장된 기록이 없어요</p>
@@ -548,9 +548,9 @@ const RecordTab = ({ currentUser, onPublish }) => {
                   >
                     <div
                       className="draft-thumb"
-                      style={{ background: 'var(--primary-bg, #EBFBEE)', fontSize: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ background: 'var(--tint)', color: 'var(--primary)', fontSize: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      📝
+                      <i className="fa-regular fa-pen-to-square" aria-hidden="true"></i>
                     </div>
                     <div className="draft-info">
                       <div className="draft-title">{d.title || '(제목 없음)'}</div>
@@ -560,7 +560,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
                   <button
                     onClick={() => handleDeleteDraft(d.id)}
                     aria-label="임시저장 삭제"
-                    style={{ background: 'none', border: 'none', color: '#e63946', cursor: 'pointer', padding: '8px' }}
+                    style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '8px' }}
                   >
                     <i className="fas fa-trash-alt"></i>
                   </button>
@@ -571,27 +571,35 @@ const RecordTab = ({ currentUser, onPublish }) => {
           </div>
         ) : (
           <>
+            {/* 단계 표시 — 사진 고르기 · 장소 확인 · 글쓰기 */}
+            <div className="record-progress" aria-label={`3단계 중 ${step}단계`}>
+              {[1, 2, 3].map((n) => (
+                <span key={n} className={n <= step ? 'done' : ''}></span>
+              ))}
+              <em>{step} / 3</em>
+            </div>
+
             {step === 1 && (
               <div className="record-step">
                 <div className="record-hero">
-                  <div className="record-hero-icon">📷</div>
+                  <div className="record-hero-icon"><i className="fa-solid fa-camera" aria-hidden="true"></i></div>
                   <h2>여행을 기록하세요</h2>
-                  <p style={{ fontSize: '13px', color: '#868E96', marginTop: '8px' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px' }}>
                     사진 속 촬영 시각과 위치로 여행 경로를 자동으로 그려드려요.
                   </p>
                 </div>
                 <h3 className="step-title">어떻게 기록할까요?</h3>
                 <div className="record-options">
                   <button className="record-option-btn" onClick={() => cameraInputRef.current?.click()}>
-                    <div className="opt-icon">📸</div>
+                    <div className="opt-icon"><i className="fa-solid fa-camera" aria-hidden="true"></i></div>
                     <div className="opt-label">지금 촬영</div>
                   </button>
                   <button className="record-option-btn" onClick={() => galleryInputRef.current?.click()}>
-                    <div className="opt-icon">🖼️</div>
+                    <div className="opt-icon"><i className="fa-regular fa-images" aria-hidden="true"></i></div>
                     <div className="opt-label">갤러리 선택</div>
                   </button>
                   <button className="record-option-btn" onClick={() => setShowDraftsPanel(true)}>
-                    <div className="opt-icon">📝</div>
+                    <div className="opt-icon"><i className="fa-regular fa-folder-open" aria-hidden="true"></i></div>
                     <div className="opt-label">임시저장 열기{drafts.length > 0 ? ` (${drafts.length})` : ''}</div>
                   </button>
                 </div>
@@ -600,7 +608,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
 
             {step === 2 && (
               <div className="record-step">
-                <h3 className="step-title">📍 장소 순서와 체류시간 확인</h3>
+                <h3 className="step-title">장소 순서와 머문 시간</h3>
                 <div style={{ marginBottom: '16px' }}>
                   <RouteMap route={spots} detailedPath={previewPath} height="180px" />
                 </div>
@@ -614,7 +622,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
                       routeConnectionUI = (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0 8px' }}>
                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
-                          <div style={{ fontSize: '12px', color: '#868E96', padding: '6px 12px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 12px' }}>
                             장소를 지정하면 이동 시간이 계산돼요
                           </div>
                           <div style={{ width: '2px', height: '16px', background: '#ccc' }}></div>
@@ -624,11 +632,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
                       // 같은 장소로 묶인 사진 사이에는 이동이 없다.
                       routeConnectionUI = (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px 0 6px' }}>
-                          <div style={{ width: '2px', height: '10px', background: '#D8F3DC' }}></div>
-                          <div style={{ fontSize: '11px', color: '#2D6A4F', fontWeight: 700, padding: '2px 10px' }}>
-                            📷 같은 장소
+                          <div style={{ width: '2px', height: '10px', background: 'var(--tint)' }}></div>
+                          <div style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 700, padding: '2px 10px' }}>
+                            <i className="fa-solid fa-camera ico" aria-hidden="true"></i>같은 장소
                           </div>
-                          <div style={{ width: '2px', height: '10px', background: '#D8F3DC' }}></div>
+                          <div style={{ width: '2px', height: '10px', background: 'var(--tint)' }}></div>
                         </div>
                       );
                     } else if (i < spots.length - 1) {
@@ -658,7 +666,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
                               display: 'flex',
                               gap: '8px',
                               alignItems: 'center',
-                              background: '#f8f9fa',
+                              background: 'var(--surface-2)',
                               padding: '8px 12px',
                               borderRadius: '20px',
                               border: '1px solid #eee',
@@ -673,23 +681,23 @@ const RecordTab = ({ currentUser, onPublish }) => {
                                 updated[i] = { ...updated[i], transitType: e.target.value };
                                 setSpots(updated);
                               }}
-                              style={{ border: 'none', background: 'transparent', fontWeight: 'bold', color: '#52B788', outline: 'none', cursor: 'pointer' }}
+                              style={{ border: 'none', background: 'transparent', fontWeight: 'bold', color: 'var(--primary)', outline: 'none', cursor: 'pointer' }}
                             >
-                              <option value="walk">🚶 도보 ({travelLabel('walk')})</option>
-                              <option value="car">🚗 차량 ({travelLabel('car')})</option>
+                              <option value="walk">도보 ({travelLabel('walk')})</option>
+                              <option value="car">차량 ({travelLabel('car')})</option>
                             </select>
                             <span style={{ color: '#ccc' }}>|</span>
-                            <span style={{ color: 'var(--text-sub, #868E96)' }}>
+                            <span style={{ color: 'var(--text-sub, var(--text-muted))' }}>
                               {spot.timeEstimated || nextSpot.timeEstimated ? (
-                                '🕒 촬영 시각 없음'
+                                '촬영 시각 없음'
                               ) : stayTime === null ? (
-                                '🌙 다음 날로 이어짐'
+                                '다음 날로 이어짐'
                               ) : stayTime === 0 ? (
                                 // 사진 간격이 이동 시간보다 짧다 — 머문 시간 없이 곧장 다음 장소로 간 것
-                                '➡️ 바로 이동'
+                                '바로 이동'
                               ) : (
                                 <>
-                                  ☕ <strong>약 {formatDuration(stayTime)}</strong> 머무름
+                                  <i className="fa-regular fa-clock ico" aria-hidden="true"></i><strong>약 {formatDuration(stayTime)}</strong> 머무름
                                 </>
                               )}
                             </span>
@@ -731,18 +739,18 @@ const RecordTab = ({ currentUser, onPublish }) => {
                                 outline: 'none',
                                 fontSize: '15px',
                                 fontWeight: '800',
-                                color: 'var(--primary, #2D6A4F)',
+                                color: 'var(--primary, var(--primary))',
                                 borderBottom: '1px dashed #ccc'
                               }}
                             />
                             {hasLocation(spot) ? (
-                              <div className="spot-coords" style={{ fontSize: '11px', color: '#868E96', marginTop: '4px' }}>
-                                📍 {Number(spot.lat).toFixed(4)}, {Number(spot.lng).toFixed(4)}
+                              <div className="spot-coords" style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                <i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>{Number(spot.lat).toFixed(4)}, {Number(spot.lng).toFixed(4)}
                                 {spot.locationSource === 'manual' && ' · 직접 지정'}
                                 <button
                                   onClick={() => setLocatingIndex(i)}
                                   aria-label={`${i + 1}번째 장소 위치 변경`}
-                                  style={{ marginLeft: '6px', background: 'none', border: 'none', padding: 0, color: '#52B788', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                  style={{ marginLeft: '6px', background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                                 >
                                   변경
                                 </button>
@@ -762,25 +770,25 @@ const RecordTab = ({ currentUser, onPublish }) => {
                                   cursor: 'pointer'
                                 }}
                               >
-                                📍 위치 정보 없음 · 위치 지정하기
+                                <i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>위치 정보 없음 · 위치 지정하기
                               </button>
                             )}
                             {spot.timeEstimated && (
                               <div style={{ fontSize: '11px', color: '#E8590C', marginTop: '4px' }}>
-                                🕒 촬영 시각 정보 없음 · 순서가 다르면 끌어서 옮겨주세요
+                                <i className="fa-regular fa-clock ico" aria-hidden="true"></i>촬영 시각 정보 없음 · 순서가 다르면 끌어서 옮겨주세요
                               </div>
                             )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
                             <button
                               onClick={() => handleRemoveSpot(i)}
-                              style={{ background: 'none', border: 'none', color: '#e63946', cursor: 'pointer', padding: '5px', fontSize: '16px' }}
+                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '5px', fontSize: '16px' }}
                               title="삭제하기"
                               aria-label={`${i + 1}번째 장소 삭제`}
                             >
                               <i className="fas fa-trash-alt"></i>
                             </button>
-                            <div style={{ color: '#adb5bd', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
+                            <div style={{ color: 'var(--text-faint)', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
                               <i className="fas fa-bars"></i>
                             </div>
                           </div>
@@ -794,13 +802,13 @@ const RecordTab = ({ currentUser, onPublish }) => {
                 <div style={{ display: 'flex', gap: '10px', marginTop: '16px', marginBottom: '24px' }}>
                   <button
                     onClick={() => cameraInputRef.current?.click()}
-                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}
+                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed var(--primary)', background: 'var(--tint)', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}
                   >
                     <i className="fas fa-camera"></i> + 카메라
                   </button>
                   <button
                     onClick={() => galleryInputRef.current?.click()}
-                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed #52B788', background: '#edf7ee', color: '#2D6A4F', fontWeight: 'bold', cursor: 'pointer' }}
+                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px dashed var(--primary)', background: 'var(--tint)', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}
                   >
                     <i className="fas fa-image"></i> + 갤러리
                   </button>
@@ -812,7 +820,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
                     onClick={handleSaveDraft}
                     style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ccc', background: '#fff', color: '#666', fontWeight: 'bold', cursor: 'pointer' }}
                   >
-                    💾 임시저장
+                    <i className="fa-regular fa-floppy-disk ico" aria-hidden="true"></i>임시저장
                   </button>
                   <button className="step-next-btn" onClick={handleGoToWriteStep} disabled={spots.length === 0}>
                     다음
@@ -828,7 +836,7 @@ const RecordTab = ({ currentUser, onPublish }) => {
 
             {step === 3 && (
               <div className="record-step">
-                <h3 className="step-title">✍️ 여행 이야기를 써주세요</h3>
+                <h3 className="step-title">여행 이야기를 써주세요</h3>
                 <div className="write-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <input
                     type="text"
@@ -841,18 +849,18 @@ const RecordTab = ({ currentUser, onPublish }) => {
                   <select
                     className="form-input"
                     aria-label="동행 유형"
-                    style={{ backgroundColor: '#f8f9fa' }}
+                    style={{ backgroundColor: 'var(--surface-2)' }}
                     value={companion}
                     onChange={(e) => setCompanion(e.target.value)}
                   >
                     <option value="">누구와 함께한 여행인가요?</option>
-                    <option value="solo">🚶 나홀로 여행</option>
-                    <option value="friends">👯 친구와 함께</option>
-                    <option value="couple">💑 연인과 함께</option>
-                    <option value="family">👨‍👩‍👧‍👦 가족과 함께</option>
+                    <option value="solo">나홀로 여행</option>
+                    <option value="friends">친구와 함께</option>
+                    <option value="couple">연인과 함께</option>
+                    <option value="family">가족과 함께</option>
                   </select>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '14px', color: '#52B788', fontWeight: 'bold' }}>#</span>
+                    <span style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--primary)', fontWeight: 'bold' }}>#</span>
                     <input
                       type="text"
                       className="form-input"
@@ -879,10 +887,10 @@ const RecordTab = ({ currentUser, onPublish }) => {
                     disabled={isPublishing}
                     style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ccc', background: '#fff', color: '#666', fontWeight: 'bold', cursor: 'pointer' }}
                   >
-                    💾 임시저장
+                    <i className="fa-regular fa-floppy-disk ico" aria-hidden="true"></i>임시저장
                   </button>
                   <button className="publish-btn" onClick={handlePublish} disabled={isPublishing}>
-                    {isPublishing ? '☁️ 올리는 중...' : '게시하기'}
+                    {isPublishing ? '올리는 중...' : '게시하기'}
                   </button>
                 </div>
               </div>

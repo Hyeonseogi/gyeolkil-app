@@ -154,11 +154,11 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
             type="button"
             onClick={() => onNavigate('mypage')}
             aria-label="뒤로 가기"
-            style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', marginRight: '15px', color: '#1A1A1A' }}
+            style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', marginRight: '15px', color: 'var(--ink)' }}
           >
             <i className="fas fa-arrow-left"></i>
           </button>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#1A1A1A' }}>프로필 편집</h2>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: 'var(--ink)' }}>프로필 편집</h2>
         </div>
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -171,7 +171,7 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
                 onError={(e) => {
                   e.currentTarget.src = FALLBACK_AVATAR;
                 }}
-                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1px solid #E1E4E6' }}
+                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--line)' }}
               />
               <label
                 htmlFor="profile-upload"
@@ -179,7 +179,7 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
                   position: 'absolute',
                   bottom: 0,
                   right: 0,
-                  backgroundColor: '#2B8A3E',
+                  backgroundColor: 'var(--primary)',
                   color: '#fff',
                   width: '32px',
                   height: '32px',
@@ -198,16 +198,16 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
               </label>
               <input id="profile-upload" type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
             </div>
-            <span style={{ fontSize: '13px', color: '#868E96' }}>사진 변경</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>사진 변경</span>
           </div>
 
           {/* 닉네임 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label htmlFor="nickname-input" style={{ fontSize: '14px', fontWeight: '600', color: '#495057' }}>
+              <label htmlFor="nickname-input" style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-sub)' }}>
                 닉네임
               </label>
-              <span style={{ fontSize: '12px', color: nickname.length > NICKNAME_MAX ? '#e03131' : '#ADB5BD' }}>
+              <span style={{ fontSize: '12px', color: nickname.length > NICKNAME_MAX ? 'var(--danger)' : 'var(--text-faint)' }}>
                 {nickname.length}/{NICKNAME_MAX}
               </span>
             </div>
@@ -218,17 +218,17 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
               maxLength={NICKNAME_MAX}
               onChange={(e) => setNickname(e.target.value)}
               placeholder="변경할 닉네임을 입력하세요"
-              style={{ padding: '12px', borderRadius: '8px', border: '1px solid #CED4DA', fontSize: '15px', outline: 'none' }}
+              style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--line-strong)', fontSize: '15px', outline: 'none' }}
             />
           </div>
 
           {/* 한줄 소개 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label htmlFor="bio-input" style={{ fontSize: '14px', fontWeight: '600', color: '#495057' }}>
+              <label htmlFor="bio-input" style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-sub)' }}>
                 한줄 소개
               </label>
-              <span style={{ fontSize: '12px', color: '#ADB5BD' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
                 {bio.length}/{BIO_MAX}
               </span>
             </div>
@@ -242,7 +242,7 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
               style={{
                 padding: '12px',
                 borderRadius: '8px',
-                border: '1px solid #CED4DA',
+                border: '1px solid var(--line-strong)',
                 fontSize: '15px',
                 outline: 'none',
                 resize: 'none',
@@ -255,7 +255,7 @@ const EditProfilePage = ({ currentUser, onNavigate, onProfileUpdated }) => {
             type="submit"
             disabled={isLoading}
             style={{
-              backgroundColor: isLoading ? '#8CC7A1' : '#2B8A3E',
+              backgroundColor: isLoading ? 'var(--primary-disabled)' : 'var(--primary)',
               color: '#fff',
               padding: '14px',
               borderRadius: '8px',

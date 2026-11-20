@@ -404,9 +404,60 @@ export const formatTripDayLabel = (route, timestamp) => {
   return `${day}일차 · ${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 };
 
+/**
+ * 카카오맵 길찾기 링크 (목적지만 정하고 출발지는 사용자의 현재 위치).
+ * 모바일에서는 카카오맵 앱이, 아니면 웹이 열린다. 이름의 쉼표는 링크 구분자라 공백으로 바꾼다.
+ */
+export const kakaoDirectionsUrl = (name, lat, lng) => {
+  const label = String(name || '목적지').replace(/,/g, ' ').trim() || '목적지';
+  return `https://map.kakao.com/link/to/${encodeURIComponent(label)},${Number(lat)},${Number(lng)}`;
+};
+
+// ── 여정 요약 (피드 카드 · 내 발자취) ─────────────────────
+
+/** 좌표 목록을 차례로 이은 길이(km). 좌표가 없는 점은 건너뛴다. */
+const sumPathKm = (points) => {
+  const list = (Array.isArray(points) ? points : []).filter(hasLocation);
+  let km = 0;
+  for (let i = 0; i < list.length - 1; i += 1) {
+    km += getDistanceFromLatLonInKm(list[i].lat, list[i].lng, list[i + 1].lat, list[i + 1].lng);
+  }
+  return km;
+};
+
+/**
+ * 여정의 이동 거리(km).
+ * 실제 경로(detailedPath)가 있으면 그 길이, 없으면 장소 사이 직선 거리의 합.
+ */
+export const getRouteDistanceKm = (post) => {
+  const path = Array.isArray(post?.detailedPath) ? post.detailedPath.filter(hasLocation) : [];
+  return path.length > 1 ? sumPathKm(path) : sumPathKm(post?.route);
+};
+
+/** 거리 라벨 — "850m" / "1.8km" / "123km". 0 이면 빈 문자열 */
+export const formatDistanceKm = (km) => {
+  const value = Number(km);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (value < 1) return `${Math.max(10, Math.round((value * 1000) / 10) * 10)}m`;
+  if (value < 100) return `${value.toFixed(1)}km`;
+  return `${Math.round(value)}km`;
+};
+
+/**
+ * 여정 길이 라벨. 당일치기면 첫 사진부터 마지막 사진까지("2시간 20분"), 여러 날이면 "3일".
+ * 촬영 시각이 없거나 사진 한 장뿐이면 빈 문자열.
+ */
+export const formatTripLength = (route) => {
+  const range = getTripRange(route);
+  if (!range || range.end <= range.start) return '';
+  const days = Math.round((startOfLocalDay(range.end) - startOfLocalDay(range.start)) / 86400000) + 1;
+  if (days > 1) return `${days}일`;
+  return formatDuration((range.end - range.start) / 60000);
+};
+
 // ── 토스트 ───────────────────────────────────────────
 const TOAST_COLORS = {
-  info: 'rgba(44,42,41,.92)',
+  info: 'rgba(22,33,27,.92)',
   success: 'rgba(45,106,79,.94)',
   error: 'rgba(201,42,42,.94)'
 };

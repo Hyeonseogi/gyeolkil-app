@@ -5,8 +5,8 @@
 const PostGrid = ({ posts = [], onOpenModal, emptyMessage = '등록된 기록이 없습니다.' }) => {
   if (posts.length === 0) {
     return (
-      <div style={{ padding: '60px 20px', textAlign: 'center', color: '#ADB5BD' }}>
-        <div style={{ fontSize: '40px', marginBottom: '16px' }}>📭</div>
+      <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-faint)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '16px' }}><i className="fa-regular fa-folder-open" aria-hidden="true"></i></div>
         <p style={{ fontSize: '14px', margin: 0 }}>{emptyMessage}</p>
       </div>
     );
@@ -32,7 +32,7 @@ const PostGrid = ({ posts = [], onOpenModal, emptyMessage = '등록된 기록이
               overflow: 'hidden',
               cursor: onOpenModal ? 'pointer' : 'default',
               position: 'relative',
-              backgroundColor: '#F8F9FA'
+              backgroundColor: 'var(--surface-2)'
             }}
           >
             {firstPhoto ? (
@@ -50,9 +50,9 @@ const PostGrid = ({ posts = [], onOpenModal, emptyMessage = '등록된 기록이
                   textAlign: 'center'
                 }}
               >
-                <span style={{ fontSize: '20px', marginBottom: '4px' }}>📍</span>
+                <span style={{ fontSize: '20px', marginBottom: '4px' }}><i className="fa-solid fa-location-dot" aria-hidden="true"></i></span>
                 {/* 제목이 15자보다 짧으면 말줄임표를 붙이지 않는다 */}
-                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#495057', wordBreak: 'keep-all' }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--text-sub)', wordBreak: 'keep-all' }}>
                   {title.length > 15 ? `${title.slice(0, 15)}…` : title}
                 </span>
               </div>

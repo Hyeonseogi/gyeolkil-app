@@ -11,7 +11,7 @@ const SetupNotice = ({ missingKeys = [] }) => (
       alignItems: 'center',
       justifyContent: 'center',
       padding: '32px 20px',
-      background: '#F8F9FA'
+      background: 'var(--surface-2)'
     }}
   >
     <div
@@ -24,22 +24,22 @@ const SetupNotice = ({ missingKeys = [] }) => (
         boxShadow: '0 10px 40px rgba(0,0,0,0.08)'
       }}
     >
-      <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔧</div>
-      <h1 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 10px', color: '#1A1A1A' }}>
+      <div style={{ fontSize: '40px', marginBottom: '12px' }}><i className="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i></div>
+      <h1 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 10px', color: 'var(--ink)' }}>
         환경 설정이 필요합니다
       </h1>
-      <p style={{ fontSize: '14px', color: '#495057', lineHeight: 1.7, margin: '0 0 20px' }}>
+      <p style={{ fontSize: '14px', color: 'var(--text-sub)', lineHeight: 1.7, margin: '0 0 20px' }}>
         Firebase 연결 정보가 비어 있어 곁길을 시작할 수 없습니다.
-        프로젝트 루트의 <code style={{ background: '#F1F3F5', padding: '2px 6px', borderRadius: '6px' }}>.env.example</code>
-        을 <code style={{ background: '#F1F3F5', padding: '2px 6px', borderRadius: '6px' }}>.env.local</code> 로 복사한 뒤
+        프로젝트 루트의 <code style={{ background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '6px' }}>.env.example</code>
+        을 <code style={{ background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '6px' }}>.env.local</code> 로 복사한 뒤
         값을 채우고 개발 서버를 다시 시작해 주세요.
       </p>
 
-      <div style={{ background: '#FFF5F5', border: '1px solid #FFC9C9', borderRadius: '12px', padding: '14px 16px' }}>
+      <div style={{ background: 'var(--danger-tint)', border: '1px solid #FFC9C9', borderRadius: '12px', padding: '14px 16px' }}>
         <div style={{ fontSize: '12px', fontWeight: 700, color: '#C92A2A', marginBottom: '8px' }}>
           비어 있는 값 {missingKeys.length}개
         </div>
-        <ul style={{ margin: 0, paddingLeft: '18px', color: '#E03131', fontSize: '13px', lineHeight: 1.8 }}>
+        <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--danger)', fontSize: '13px', lineHeight: 1.8 }}>
           {missingKeys.map((key) => (
             <li key={key}>
               <code>VITE_{key.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase().replace(/^_/, '')}</code>
@@ -52,8 +52,8 @@ const SetupNotice = ({ missingKeys = [] }) => (
         style={{
           marginTop: '18px',
           marginBottom: 0,
-          background: '#1A1A1A',
-          color: '#B7E4C7',
+          background: 'var(--primary)',
+          color: 'var(--primary)',
           borderRadius: '12px',
           padding: '14px 16px',
           fontSize: '12.5px',

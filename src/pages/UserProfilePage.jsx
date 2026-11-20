@@ -92,12 +92,12 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
 
   if (notFound) {
     return (
-      <section className="tab-page active" style={{ padding: '60px 20px', textAlign: 'center', color: '#868E96' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
+      <section className="tab-page active" style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}><i className="fa-solid fa-magnifying-glass" aria-hidden="true"></i></div>
         <p style={{ margin: '0 0 20px' }}>존재하지 않거나 탈퇴한 사용자입니다.</p>
         <button
           onClick={onClose}
-          style={{ padding: '10px 24px', borderRadius: '999px', border: 'none', background: '#52B788', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+          style={{ padding: '10px 24px', borderRadius: '999px', border: 'none', background: 'var(--primary)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
         >
           돌아가기
         </button>
@@ -107,8 +107,8 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
 
   if (!userData) {
     return (
-      <section className="tab-page active" style={{ padding: '40px', textAlign: 'center', color: '#ADB5BD' }}>
-        <div className="loading-spinner">유저 정보를 불러오는 중... 🧭</div>
+      <section className="tab-page active" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-faint)' }}>
+        <div className="loading-spinner">유저 정보를 불러오는 중...</div>
       </section>
     );
   }
@@ -126,7 +126,7 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
           backdropFilter: 'blur(8px)',
           zIndex: 10,
           padding: '16px 20px',
-          borderBottom: '1px solid #F1F3F5',
+          borderBottom: '1px solid var(--line)',
           display: 'flex',
           alignItems: 'center'
         }}
@@ -134,17 +134,17 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
         <button
           onClick={onClose}
           aria-label="뒤로 가기"
-          style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}
+          style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--ink)', cursor: 'pointer', marginRight: '16px' }}
         >
           <i className="fas fa-arrow-left"></i>
         </button>
-        <span style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{userData.displayName || '여행자'}</span>
+        <span style={{ fontWeight: '800', fontSize: '16px', color: 'var(--ink)' }}>{userData.displayName || '여행자'}</span>
       </div>
 
       {/* 프로필 영역 (MyPage 와 동일한 레이아웃) */}
       <div style={{ padding: '24px 20px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, #52B788, #b7e4c7)' }}>
+          <div style={{ padding: '3px', borderRadius: '50%', background: 'linear-gradient(45deg, var(--primary), var(--tint-strong))' }}>
             <img
               src={userData.photoURL || FALLBACK_AVATAR}
               alt=""
@@ -162,19 +162,19 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
               { value: userData?.following?.length || 0, label: '팔로잉' }
             ].map((stat) => (
               <div key={stat.label}>
-                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>{stat.value}</div>
-                <div style={{ fontSize: '13px', color: '#495057' }}>{stat.label}</div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)' }}>{stat.value}</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-sub)' }}>{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div>
-          <h1 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: '#1A1A1A' }}>
+          <h1 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: 'var(--ink)' }}>
             {userData.displayName || '여행자'}
           </h1>
-          <p style={{ color: '#495057', fontSize: '14px', lineHeight: '1.4', margin: 0 }}>
-            {userData.bio || '여행 기록을 남기는 중 ✈️'}
+          <p style={{ color: 'var(--text-sub)', fontSize: '14px', lineHeight: '1.4', margin: 0 }}>
+            {userData.bio || '여행 기록을 남기는 중'}
           </p>
         </div>
 
@@ -189,8 +189,8 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
                 borderRadius: '8px',
                 border: 'none',
                 cursor: isSubmitting ? 'wait' : 'pointer',
-                background: isFollowing ? '#E9ECEF' : '#52B788',
-                color: isFollowing ? '#495057' : '#fff',
+                background: isFollowing ? 'var(--surface-3)' : 'var(--primary)',
+                color: isFollowing ? 'var(--text-sub)' : '#fff',
                 fontSize: '13px',
                 fontWeight: 'bold',
                 opacity: isSubmitting ? 0.7 : 1,
@@ -205,27 +205,27 @@ const UserProfilePage = ({ currentUser, userId, onOpenModal, onClose }) => {
               flex: 1,
               padding: '8px',
               borderRadius: '8px',
-              background: '#EBFBEE',
+              background: 'var(--tint)',
               fontSize: '13px',
               fontWeight: 'bold',
-              color: '#2B8A3E',
+              color: 'var(--primary)',
               textAlign: 'center'
             }}
           >
-            📍 방문 장소 {totalPlaces}곳
+            <i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>방문 장소 {totalPlaces}곳
           </div>
         </div>
       </div>
 
       {/* 게시물 그리드 */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #F1F3F5', backgroundColor: '#fff' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', backgroundColor: '#fff' }}>
         <div
           style={{
             flex: 1,
             padding: '14px 0',
             textAlign: 'center',
-            color: '#1A1A1A',
-            borderBottom: '2px solid #1A1A1A',
+            color: 'var(--ink)',
+            borderBottom: '2px solid var(--primary)',
             fontSize: '18px'
           }}
         >

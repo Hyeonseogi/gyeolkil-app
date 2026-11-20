@@ -4,7 +4,11 @@ import {
   countPlaces,
   extractRegionsFromRoute,
   formatDateLabel,
+  formatDistanceKm,
   formatDuration,
+  formatTripLength,
+  getRouteDistanceKm,
+  kakaoDirectionsUrl,
   formatNotificationTime,
   formatTime,
   formatTripDate,
@@ -578,5 +582,53 @@ describe('알림 아이콘 / 색상', () => {
       expect(colors.bg).toMatch(/^#/);
       expect(colors.shadow).toBeTruthy();
     });
+  });
+});
+
+describe('여정 요약 — 이동 거리 · 여정 길이', () => {
+  const at = (d, h, m = 0) => new Date(2026, 10, d, h, m).getTime();
+
+  it('실제 경로가 있으면 그 길이로, 없으면 장소 사이 직선 거리로 잰다', () => {
+    const route = [{ lat: 37.5, lng: 127.0 }, { lat: 37.51, lng: 127.0 }];
+    const straight = getRouteDistanceKm({ route });
+    expect(straight).toBeCloseTo(1.11, 1);
+
+    // 돌아가는 길은 직선보다 길다
+    const detailedPath = [{ lat: 37.5, lng: 127.0 }, { lat: 37.505, lng: 127.01 }, { lat: 37.51, lng: 127.0 }];
+    expect(getRouteDistanceKm({ route, detailedPath })).toBeGreaterThan(straight);
+  });
+
+  it('좌표가 없는 지점은 건너뛰고, 아무것도 없으면 0', () => {
+    expect(getRouteDistanceKm({ route: [{ lat: 37.5, lng: 127.0 }, { lat: null, lng: null }] })).toBe(0);
+    expect(getRouteDistanceKm({})).toBe(0);
+  });
+
+  it('거리 라벨: 1km 미만은 m, 100km 미만은 소수 한 자리', () => {
+    expect(formatDistanceKm(0)).toBe('');
+    expect(formatDistanceKm(0.234)).toBe('230m');
+    expect(formatDistanceKm(1.84)).toBe('1.8km');
+    expect(formatDistanceKm(123.4)).toBe('123km');
+  });
+
+  it('당일치기는 첫 사진부터 마지막 사진까지, 여러 날이면 일수', () => {
+    expect(formatTripLength([{ timestamp: at(8, 10) }, { timestamp: at(8, 12, 20) }])).toBe('2시간 20분');
+    expect(formatTripLength([{ timestamp: at(28, 10) }, { timestamp: at(30, 9) }])).toBe('3일');
+  });
+
+  it('사진 한 장이거나 촬영 시각이 없으면 빈 문자열', () => {
+    expect(formatTripLength([{ timestamp: at(8, 10) }])).toBe('');
+    expect(formatTripLength([{ timestamp: at(8, 10), timeEstimated: true }, { timestamp: at(8, 11), timeEstimated: true }])).toBe('');
+  });
+});
+describe('kakaoDirectionsUrl — 카카오맵 길찾기 링크', () => {
+  it('장소 이름과 좌표로 목적지 링크를 만든다', () => {
+    expect(kakaoDirectionsUrl('명동성당', 37.5636, 126.9869)).toBe(
+      `https://map.kakao.com/link/to/${encodeURIComponent('명동성당')},37.5636,126.9869`
+    );
+  });
+
+  it('이름의 쉼표는 구분자와 섞이지 않게 빼고, 이름이 없으면 "목적지"', () => {
+    expect(kakaoDirectionsUrl('카페, 2층', 1, 2)).toContain(encodeURIComponent('카페  2층'));
+    expect(kakaoDirectionsUrl('', 1, 2)).toContain(encodeURIComponent('목적지'));
   });
 });

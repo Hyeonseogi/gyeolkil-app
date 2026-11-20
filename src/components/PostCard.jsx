@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import RouteMap from './RouteMap';
-import { FALLBACK_AVATAR, formatTime, formatTripDate, getLikeCount } from '../data';
+import {
+  countPlaces,
+  FALLBACK_AVATAR,
+  formatDistanceKm,
+  formatTime,
+  formatTripDate,
+  formatTripLength,
+  getLikeCount,
+  getRouteDistanceKm
+} from '../data';
 
 /**
  * 피드 카드 한 장.
@@ -17,6 +26,14 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
   const isSaved = !!currentUserId && post.savedBy?.includes(currentUserId);
   // 이름 옆의 "n시간 전"은 올린 때, 이 값은 사진에서 읽은 다녀온 때.
   const tripDate = formatTripDate(post.route);
+
+  // 사진 밑에 한 줄로 보여 주는 여정 요약 — 비어 있는 항목은 뺀다.
+  const placeCount = countPlaces(post.route);
+  const summary = [
+    placeCount > 0 && { icon: 'fa-solid fa-location-dot', text: `장소 ${placeCount}곳` },
+    { icon: 'fa-solid fa-route', text: formatDistanceKm(getRouteDistanceKm(post)) },
+    { icon: 'fa-regular fa-clock', text: formatTripLength(post.route) }
+  ].filter((item) => item && item.text);
 
   // 깨진 이미지는 슬라이드에서 제외해 빈 칸이 생기지 않도록 한다.
   const photoSpots = (Array.isArray(post.route) ? post.route : []).filter(
@@ -58,16 +75,16 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
               tabIndex={0}
               onClick={() => onOpenUser && onOpenUser(post.userId)}
               onKeyDown={(e) => e.key === 'Enter' && onOpenUser && onOpenUser(post.userId)}
-              style={{ fontWeight: 'bold', fontSize: '14px', color: '#1A1A1A', cursor: 'pointer' }}
+              style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--ink)', cursor: 'pointer' }}
             >
               {userName}
             </span>
-            <span style={{ color: '#ADB5BD', fontSize: '12px' }}>• {formatTime(post.createdAt)}</span>
+            <span style={{ color: 'var(--text-faint)', fontSize: '12px' }}>• {formatTime(post.createdAt)}</span>
           </div>
           <div
             style={{
               fontSize: '12px',
-              color: '#666',
+              color: 'var(--text-sub)',
               fontWeight: '500',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -75,12 +92,12 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
             }}
           >
             {/* 날짜를 앞에 둔다 — 긴 장소 이름이 말줄임될 때 날짜까지 잘리지 않도록 */}
-            {tripDate ? `🗓 ${tripDate} · ` : ''}📍 {post.route?.[0]?.name || '위치 정보 없음'}
+            {tripDate && <><i className="fa-regular fa-calendar ico" aria-hidden="true"></i>{tripDate}<span style={{ margin: '0 6px', color: 'var(--text-faint)' }}>·</span></>}<i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>{post.route?.[0]?.name || '위치 정보 없음'}
           </div>
         </div>
       </header>
 
-      <div style={{ width: '100%', aspectRatio: '1 / 1', backgroundColor: '#F8F9FA', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ width: '100%', aspectRatio: '1 / 1', backgroundColor: 'var(--surface-2)', position: 'relative', overflow: 'hidden' }}>
         {hasPhotos ? (
           <>
             <div
@@ -136,14 +153,14 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
 
       <div style={{ padding: '12px 16px' }}>
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#1A1A1A', marginBottom: '10px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--ink)', marginBottom: '10px' }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={(e) => onToggleLike(e, post)}
             aria-label={isLiked ? '좋아요 취소' : '좋아요'}
             aria-pressed={isLiked}
-            style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? '#e63946' : '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', padding: 0, color: isLiked ? 'var(--danger)' : 'var(--ink)', fontSize: '20px', cursor: 'pointer' }}
           >
             <i className={isLiked ? 'fas fa-heart' : 'far fa-heart'}></i>
           </button>
@@ -151,7 +168,7 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
           <button
             onClick={openPost}
             aria-label="댓글 보기"
-            style={{ background: 'none', border: 'none', padding: 0, color: '#1A1A1A', fontSize: '20px', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--ink)', fontSize: '20px', cursor: 'pointer' }}
           >
             <i className="far fa-comment"></i>
           </button>
@@ -160,22 +177,32 @@ const PostCard = ({ post, currentUserId, onOpenModal, onOpenUser, onToggleLike, 
             onClick={(e) => onToggleSave(e, post)}
             aria-label={isSaved ? '저장 취소' : '저장'}
             aria-pressed={isSaved}
-            style={{ background: 'none', border: 'none', padding: 0, color: '#1A1A1A', fontSize: '20px', cursor: 'pointer', marginLeft: 'auto' }}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--ink)', fontSize: '20px', cursor: 'pointer', marginLeft: 'auto' }}
           >
             <i className={isSaved ? 'fas fa-bookmark' : 'far fa-bookmark'}></i>
           </button>
         </div>
 
-        <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#1A1A1A', marginBottom: '6px' }}>
+        <div style={{ fontWeight: 'bold', fontSize: '13px', color: 'var(--ink)', marginBottom: '6px' }}>
           좋아요 {getLikeCount(post)}개
         </div>
-        <div style={{ fontWeight: '800', fontSize: '15px', color: '#1A1A1A', lineHeight: '1.3' }}>
+        <div style={{ fontWeight: '800', fontSize: '15px', color: 'var(--ink)', lineHeight: '1.3' }}>
           {post.title || '제목 없는 여행기'}
         </div>
+        {summary.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginTop: '6px', fontSize: '12px', color: 'var(--text-sub)' }}>
+            {summary.map((item) => (
+              <span key={item.icon} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <i className={`${item.icon} ico`} style={{ color: 'var(--primary)' }} aria-hidden="true"></i>
+                {item.text}
+              </span>
+            ))}
+          </div>
+        )}
         <div
           style={{
             fontSize: '13px',
-            color: '#495057',
+            color: 'var(--text-sub)',
             marginTop: '4px',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
