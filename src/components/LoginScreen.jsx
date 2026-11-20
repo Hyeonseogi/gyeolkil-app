@@ -25,11 +25,12 @@ const LoginScreen = () => {
       const userDocSnap = await getDoc(userDocRef);
 
       // 유저 정보가 없다면 최초 가입이므로 초기 데이터를 세팅
+      // 이메일은 저장하지 않는다 — users 문서는 로그인한 누구나 읽을 수 있어서 모든 회원의 이메일이 드러난다.
+      // (로그인에 쓰는 이메일은 Firebase 인증이 따로 보관한다)
       if (!userDocSnap.exists()) {
         await setDoc(userDocRef, {
           uid: user.uid,
           displayName: user.displayName || '여행자',
-          email: user.email,
           photoURL: user.photoURL || '',
           bio: '여행 기록을 남기는 중',
           followers: [],

@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, orderBy, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 import { auth, db, missingFirebaseKeys } from './firebase';
+import { removeLegacyEmail } from './privacy';
 
 import LoginScreen from './components/LoginScreen';
 import PostDetailModal from './components/PostDetailModal';
@@ -49,6 +50,8 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsAuthChecking(false);
+      // 예전 버전이 저장해 둔 이메일을 지운다 (다른 회원이 읽을 수 있던 문제)
+      if (user) removeLegacyEmail(user.uid);
       if (!user) {
         setFollowing([]);
         setNotifications([]);
