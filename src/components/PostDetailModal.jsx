@@ -279,7 +279,6 @@ const PostDetailModal = ({ postId, currentUser, onClose, onOpenUser }) => {
           await setDoc(userRef, {
             uid: currentUser.uid,
             displayName: currentUser.displayName || '여행자',
-            email: currentUser.email,
             photoURL: currentUser.photoURL || '',
             followers: [],
             following: [],
