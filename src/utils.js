@@ -378,10 +378,64 @@ export const getStayMinutes = (spot, nextSpot, travelMinutes = 0) => {
   const from = getShotTime(spot);
   const to = getShotTime(nextSpot);
   if (!from || !to) return null;
+  // 사용자가 순서를 바꿔 다음 사진이 더 일찍 찍혔으면 간격이 "머문 시간"이 아니다.
+  if (to < from) return null;
   if (startOfLocalDay(from) !== startOfLocalDay(to)) return null;
 
-  const gap = Math.round(Math.abs(to - from) / 60000);
+  const gap = Math.round((to - from) / 60000);
   return Math.max(0, gap - (Number(travelMinutes) || 0));
+};
+
+/** 목록 순서와 촬영 시각 순서가 어긋난 구간인지 (다음 사진이 더 일찍 찍힘 — 순서를 직접 바꾼 경우) */
+export const isTimeReversed = (spot, nextSpot) => {
+  const from = getShotTime(spot);
+  const to = getShotTime(nextSpot);
+  return Boolean(from && to && to < from);
+};
+
+// ── 기록 2단계의 사진 순서 ────────────────────────────
+
+/** from 자리의 항목을 to 자리로 옮긴 새 배열. 범위를 벗어나면 그대로 복사본 */
+export const moveItem = (list, from, to) => {
+  const copy = Array.isArray(list) ? [...list] : [];
+  if (from === to || from < 0 || to < 0 || from >= copy.length || to >= copy.length) return copy;
+  const [moved] = copy.splice(from, 1);
+  copy.splice(to, 0, moved);
+  return copy;
+};
+
+/**
+ * 바로 앞 사진과 radiusKm 안에서 찍은 사진은 앞 사진 좌표로 맞춰 같은 장소로 묶는다.
+ * 순서를 바꾸거나 사진을 빼고 넣을 때마다 다시 부른다. (원본 배열은 건드리지 않는다)
+ */
+export const snapConsecutiveSpots = (spots, radiusKm) => {
+  const out = (Array.isArray(spots) ? spots : []).map((spot) => ({ ...spot }));
+  for (let i = 1; i < out.length; i += 1) {
+    const d = getDistanceFromLatLonInKm(out[i - 1].lat, out[i - 1].lng, out[i].lat, out[i].lng);
+    if (d < radiusKm) {
+      out[i].lat = out[i - 1].lat;
+      out[i].lng = out[i - 1].lng;
+    }
+  }
+  return out;
+};
+
+/**
+ * 새로 고른 사진을 촬영 시각에 맞는 자리에 끼워 넣는다 — 그보다 먼저 찍은 사진 중 가장 뒤에 있는 것 바로 다음.
+ * 이미 있는 사진의 순서(사용자가 직접 바꾼 순서 포함)는 그대로 둔다.
+ */
+export const insertSpotsByTime = (existing, incoming) => {
+  const result = Array.isArray(existing) ? [...existing] : [];
+  [...(Array.isArray(incoming) ? incoming : [])]
+    .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+    .forEach((item) => {
+      let anchor = -1;
+      result.forEach((spot, idx) => {
+        if (Number(spot.timestamp) <= Number(item.timestamp)) anchor = idx;
+      });
+      result.splice(anchor + 1, 0, item);
+    });
+  return result;
 };
 
 /** 이 지점이 여행 며칠째인지 (첫날 = 1). 촬영 시각이 없으면 null */

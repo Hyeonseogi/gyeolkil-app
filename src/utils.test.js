@@ -8,7 +8,11 @@ import {
   formatDuration,
   formatTripLength,
   getRouteDistanceKm,
+  insertSpotsByTime,
+  isTimeReversed,
   kakaoDirectionsUrl,
+  moveItem,
+  snapConsecutiveSpots,
   formatNotificationTime,
   formatTime,
   formatTripDate,
@@ -630,5 +634,50 @@ describe('kakaoDirectionsUrl — 카카오맵 길찾기 링크', () => {
   it('이름의 쉼표는 구분자와 섞이지 않게 빼고, 이름이 없으면 "목적지"', () => {
     expect(kakaoDirectionsUrl('카페, 2층', 1, 2)).toContain(encodeURIComponent('카페  2층'));
     expect(kakaoDirectionsUrl('', 1, 2)).toContain(encodeURIComponent('목적지'));
+  });
+});
+describe('기록 2단계 사진 순서', () => {
+  const t = (h, m = 0) => new Date(2026, 10, 8, h, m).getTime();
+  const A = { id: 'a', lat: 37.5636, lng: 126.9869, timestamp: t(10) };
+  const B = { id: 'b', lat: 37.5599, lng: 126.9698, timestamp: t(11) };
+  const B2 = { id: 'b2', lat: 37.55992, lng: 126.96982, timestamp: t(11, 10) }; // B 에서 몇 m
+  const C = { id: 'c', lat: 37.5591, lng: 126.9678, timestamp: t(12) };
+  const ids = (list) => list.map((s) => s.id);
+
+  it('moveItem: 한 칸 위·아래로 옮기고, 끝을 넘으면 그대로', () => {
+    expect(ids(moveItem([A, B, C], 2, 1))).toEqual(['a', 'c', 'b']);
+    expect(ids(moveItem([A, B, C], 0, 1))).toEqual(['b', 'a', 'c']);
+    expect(ids(moveItem([A, B, C], 0, -1))).toEqual(['a', 'b', 'c']);
+    expect(ids(moveItem([A, B, C], 2, 3))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('snapConsecutiveSpots: 바로 앞 사진과 가까우면 같은 좌표로 묶고, 원본은 그대로 둔다', () => {
+    const out = snapConsecutiveSpots([A, B, B2, C], 0.08);
+    expect(out[2].lat).toBe(B.lat);
+    expect(out[2].lng).toBe(B.lng);
+    expect(B2.lat).toBe(37.55992); // 원본 그대로
+    expect(countPlaces(out)).toBe(3);
+  });
+
+  it('순서를 바꿔 같은 장소 사진이 떨어지면 따로 세고, 다시 붙이면 하나로 묶인다', () => {
+    const apart = snapConsecutiveSpots([A, B, C, B2], 0.08);
+    expect(countPlaces(apart)).toBe(4);
+    const together = snapConsecutiveSpots(moveItem(apart, 3, 2), 0.08);
+    expect(countPlaces(together)).toBe(3);
+  });
+
+  it('insertSpotsByTime: 새 사진은 시각에 맞는 자리에, 직접 바꾼 기존 순서는 그대로', () => {
+    // 사용자가 C 를 A 앞으로 옮겨 둔 상태에 B 를 추가
+    expect(ids(insertSpotsByTime([C, A], [B]))).toEqual(['c', 'a', 'b']);
+    // 평소에는 시각 순 정렬과 같다
+    expect(ids(insertSpotsByTime([A, C], [B]))).toEqual(['a', 'b', 'c']);
+    expect(ids(insertSpotsByTime([], [C, A, B]))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('순서를 직접 바꿔 시각이 거꾸로인 구간은 머문 시간을 세지 않는다', () => {
+    expect(isTimeReversed(B, A)).toBe(true);
+    expect(isTimeReversed(A, B)).toBe(false);
+    expect(getStayMinutes(B, A, 0)).toBeNull();
+    expect(getStayMinutes(A, B, 10)).toBe(50);
   });
 });

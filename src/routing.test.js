@@ -214,3 +214,12 @@ describe('buildPreviewPath — 2단계 지도에 그릴 경로', () => {
     expect(buildPreviewPath(null)).toEqual([]);
   });
 });
+
+describe('resolveTransitMode — 순서를 직접 바꾼 구간', () => {
+  it('다음 사진이 더 일찍 찍혔으면 간격으로 속도를 따지지 않고 거리만 본다', () => {
+    // 1.5km — 시각만 보면 4분 만에 간 것처럼 보이지만 순서가 거꾸로라 믿지 않는다
+    const later = { lat: 37.5796, lng: 126.977, timestamp: at(10, 4) };
+    const earlier = { lat: 37.5666, lng: 126.978, timestamp: at(10) };
+    expect(resolveTransitMode(later, earlier)).toBe('walk');
+  });
+});

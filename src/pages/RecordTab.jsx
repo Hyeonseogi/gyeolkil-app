@@ -14,8 +14,12 @@ import {
   getStayMinutes,
   groupRouteByPlace,
   hasLocation,
+  insertSpotsByTime,
   isDefaultPlaceName,
-  showToast
+  isTimeReversed,
+  moveItem,
+  showToast,
+  snapConsecutiveSpots
 } from '../data';
 import { reverseGeocode, reverseGeocodeAll } from '../geocode';
 import {
@@ -259,18 +263,11 @@ const RecordTab = ({ currentUser, onPublish }) => {
       }
     }
 
-    // 촬영 시각 순으로 정렬 → 실제 이동 순서가 된다.
-    const allSpots = [...spots, ...newSpots].sort((a, b) => a.timestamp - b.timestamp);
-
-    // 가까운 좌표는 같은 장소로 묶어 지도에 핀이 중복으로 찍히지 않게 한다.
+    // 새 사진은 촬영 시각에 맞는 자리에 끼워 넣는다 → 실제 이동 순서가 된다.
+    // 이미 있던 사진은 사용자가 직접 바꾼 순서까지 그대로 둔다.
+    // 그다음 가까운 좌표를 같은 장소로 묶어 지도에 핀이 겹치지 않게 한다.
     // (좌표가 없는 지점은 거리가 Infinity 라 묶이지 않는다)
-    for (let i = 1; i < allSpots.length; i += 1) {
-      const d = getDistanceFromLatLonInKm(allSpots[i - 1].lat, allSpots[i - 1].lng, allSpots[i].lat, allSpots[i].lng);
-      if (d < CLUSTER_RADIUS_KM) {
-        allSpots[i].lat = allSpots[i - 1].lat;
-        allSpots[i].lng = allSpots[i - 1].lng;
-      }
-    }
+    const allSpots = snapConsecutiveSpots(insertSpotsByTime(spots, newSpots), CLUSTER_RADIUS_KM);
 
     // 좌표로 장소 이름과 시도를 찾아 채운다. 못 찾으면 "장소 n" 그대로 둔다.
     setProgress('장소 이름을 찾는 중...');
@@ -292,11 +289,17 @@ const RecordTab = ({ currentUser, onPublish }) => {
     const noTimeCount = newSpots.filter((s) => s.timeEstimated).length;
     const notices = [];
     if (noGpsCount > 0) notices.push(`${noGpsCount}장은 위치 정보가 없어요. "위치 지정"을 눌러 장소를 골라주세요.`);
-    if (noTimeCount > 0) notices.push(`${noTimeCount}장은 촬영 시각이 없어 순서가 다를 수 있어요. 끌어서 바로잡아 주세요.`);
+    if (noTimeCount > 0) notices.push(`${noTimeCount}장은 촬영 시각이 없어 순서가 다를 수 있어요. 화살표로 바로잡아 주세요.`);
     if (notices.length > 0) showToast(notices.join(' '), 'error');
   };
 
-  const handleRemoveSpot = (indexToRemove) => setSpots(spots.filter((_, idx) => idx !== indexToRemove));
+  // 순서가 바뀌면 이웃이 달라지므로 같은 장소 묶기를 다시 한다.
+  const updateOrder = (nextSpots) => setSpots(snapConsecutiveSpots(nextSpots, CLUSTER_RADIUS_KM));
+
+  const handleRemoveSpot = (indexToRemove) => updateOrder(spots.filter((_, idx) => idx !== indexToRemove));
+
+  // 휴대폰은 끌어서 옮기기가 안 되는 브라우저가 많아 위·아래 버튼으로도 옮길 수 있게 한다.
+  const handleMoveSpot = (index, direction) => updateOrder(moveItem(spots, index, index + direction));
 
   const handleSetLocation = ({ lat, lng, name }) => {
     const target = spots[locatingIndex];
@@ -365,12 +368,10 @@ const RecordTab = ({ currentUser, onPublish }) => {
   };
   const handleDrop = () => {
     if (dragItem.current === null || dragOverItem.current === null) return;
-    const copySpots = [...spots];
-    const [moved] = copySpots.splice(dragItem.current, 1);
-    copySpots.splice(dragOverItem.current, 0, moved);
+    const reordered = moveItem(spots, dragItem.current, dragOverItem.current);
     dragItem.current = null;
     dragOverItem.current = null;
-    setSpots(copySpots);
+    updateOrder(reordered);
   };
 
   const handlePublish = async () => {
@@ -690,6 +691,9 @@ const RecordTab = ({ currentUser, onPublish }) => {
                             <span style={{ color: 'var(--text-sub, var(--text-muted))' }}>
                               {spot.timeEstimated || nextSpot.timeEstimated ? (
                                 '촬영 시각 없음'
+                              ) : isTimeReversed(spot, nextSpot) ? (
+                                // 순서를 직접 바꿔 다음 사진이 더 일찍 찍혔다 — 간격으로 머문 시간을 셀 수 없다
+                                '순서 직접 변경'
                               ) : stayTime === null ? (
                                 '다음 날로 이어짐'
                               ) : stayTime === 0 ? (
@@ -775,21 +779,37 @@ const RecordTab = ({ currentUser, onPublish }) => {
                             )}
                             {spot.timeEstimated && (
                               <div style={{ fontSize: '11px', color: '#E8590C', marginTop: '4px' }}>
-                                <i className="fa-regular fa-clock ico" aria-hidden="true"></i>촬영 시각 정보 없음 · 순서가 다르면 끌어서 옮겨주세요
+                                <i className="fa-regular fa-clock ico" aria-hidden="true"></i>촬영 시각 정보 없음 · 순서가 다르면 화살표로 옮겨주세요
                               </div>
                             )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 4px 0 6px' }}>
                             <button
                               onClick={() => handleRemoveSpot(i)}
-                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '5px', fontSize: '16px' }}
+                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', width: '36px', height: '44px', fontSize: '16px' }}
                               title="삭제하기"
                               aria-label={`${i + 1}번째 장소 삭제`}
                             >
                               <i className="fas fa-trash-alt"></i>
                             </button>
-                            <div style={{ color: 'var(--text-faint)', cursor: 'grab', padding: '5px', fontSize: '16px' }}>
-                              <i className="fas fa-bars"></i>
+                            {/* 위·아래 버튼 — 휴대폰에서도 순서를 확실히 바꿀 수 있게 (PC 는 끌어서 옮기기도 된다) */}
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <button
+                                className="spot-move-btn"
+                                onClick={() => handleMoveSpot(i, -1)}
+                                disabled={i === 0}
+                                aria-label={`${i + 1}번째 사진을 위로 옮기기`}
+                              >
+                                <i className="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                              </button>
+                              <button
+                                className="spot-move-btn"
+                                onClick={() => handleMoveSpot(i, 1)}
+                                disabled={i === spots.length - 1}
+                                aria-label={`${i + 1}번째 사진을 아래로 옮기기`}
+                              >
+                                <i className="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                              </button>
                             </div>
                           </div>
                         </div>
