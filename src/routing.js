@@ -37,7 +37,8 @@ export function resolveTransitMode(start, end) {
   const distKm = getDistanceFromLatLonInKm(start?.lat, start?.lng, end?.lat, end?.lng);
   const from = getShotTime(start);
   const to = getShotTime(end);
-  const gapMinutes = from && to ? Math.abs(to - from) / 60000 : null;
+  // 순서를 직접 바꿔 다음 사진이 더 일찍 찍혔으면 간격으로 속도를 따질 수 없다 — 거리만 본다.
+  const gapMinutes = from && to && to > from ? (to - from) / 60000 : null;
   return guessTransitMode(distKm, gapMinutes);
 }
 
