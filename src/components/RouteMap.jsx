@@ -124,7 +124,7 @@ const RouteMap = ({ route = [], detailedPath = [], paths = null, width = '100%',
 
   // 카카오 SDK 미로드(키 누락·네트워크 차단)여도 앱 전체가 죽지 않도록 방어
   if (!kakaoReady) {
-    return <MapPlaceholder width={width} height={height} message="🗺️ 지도를 불러오는 중..." />;
+    return <MapPlaceholder width={width} height={height} message="지도를 불러오는 중..." />;
   }
 
   if (validRoute.length === 0) {
@@ -145,7 +145,7 @@ const RouteMap = ({ route = [], detailedPath = [], paths = null, width = '100%',
         <Polyline
           path={polylinePaths}
           strokeWeight={4}
-          strokeColor="#52B788" // 곁길 테마 컬러
+          strokeColor="#2D6A4F" // 곁길 브랜드 초록 (지도 SDK 는 CSS 변수를 못 읽어 값으로 둔다)
           strokeOpacity={0.8}
           strokeStyle="solid"
         />
@@ -164,7 +164,7 @@ const RouteMap = ({ route = [], detailedPath = [], paths = null, width = '100%',
             <div
               title={place.name || `${i + 1}번째 장소`}
               style={{
-                background: isActive ? '#52B788' : '#2C2A29',
+                background: isActive ? 'var(--primary)' : 'var(--ink)',
                 color: '#fff',
                 borderRadius: '50%',
                 width: isActive ? '32px' : '22px',
@@ -175,7 +175,7 @@ const RouteMap = ({ route = [], detailedPath = [], paths = null, width = '100%',
                 fontSize: isActive ? '14px' : '10px',
                 fontWeight: '800',
                 border: isActive ? '3px solid white' : '2px solid white',
-                boxShadow: isActive ? '0 4px 12px rgba(82, 183, 136, 0.6)' : '0 2px 6px rgba(0,0,0,0.2)',
+                boxShadow: isActive ? '0 4px 12px rgba(45, 106, 79, 0.5)' : '0 2px 6px rgba(0,0,0,0.2)',
                 transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                 transform: isActive ? 'scale(1)' : 'scale(0.9)',
                 zIndex: isActive ? 10 : 1

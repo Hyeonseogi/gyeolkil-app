@@ -37,13 +37,13 @@ class ErrorBoundary extends Component {
           gap: '14px',
           padding: '40px 28px',
           textAlign: 'center',
-          background: '#F8F9FA',
-          color: '#1A1A1A'
+          background: 'var(--surface-2)',
+          color: 'var(--ink)'
         }}
       >
-        <div style={{ fontSize: '48px' }}>🧭</div>
+        <div style={{ fontSize: '48px' }}><i className="fa-regular fa-compass" aria-hidden="true"></i></div>
         <h1 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>길을 잃었어요</h1>
-        <p style={{ fontSize: '14px', color: '#495057', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-sub)', lineHeight: 1.6, margin: 0 }}>
           예상치 못한 오류가 발생했습니다.
           <br />
           새로고침하면 대부분 해결됩니다.
@@ -56,7 +56,7 @@ class ErrorBoundary extends Component {
             padding: '14px 32px',
             borderRadius: '999px',
             border: 'none',
-            background: '#52B788',
+            background: 'var(--primary)',
             color: '#fff',
             fontSize: '15px',
             fontWeight: 700,
@@ -75,7 +75,7 @@ class ErrorBoundary extends Component {
               overflowX: 'auto',
               textAlign: 'left',
               fontSize: '12px',
-              color: '#e03131',
+              color: 'var(--danger)',
               background: '#fff',
               border: '1px solid #ffc9c9',
               borderRadius: '12px',

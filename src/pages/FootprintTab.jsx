@@ -8,7 +8,7 @@ import {
   extractRegionsFromRoute,
   formatDateLabel,
   formatTripDate,
-  getDistanceFromLatLonInKm,
+  getRouteDistanceKm,
   getTripSortTime,
   groupRouteByPlace,
   toCoordinate
@@ -54,11 +54,8 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
       const route = Array.isArray(post.route) ? post.route : [];
       places += countPlaces(route);
       extractRegionsFromRoute(route).forEach((r) => regions.add(r));
-
-      for (let i = 0; i < route.length - 1; i += 1) {
-        const d = getDistanceFromLatLonInKm(route[i].lat, route[i].lng, route[i + 1].lat, route[i + 1].lng);
-        if (Number.isFinite(d)) distanceKm += d;
-      }
+      // 피드 카드와 같은 기준 — 실제 경로가 있으면 그 길이, 없으면 장소 사이 직선 거리
+      distanceKm += getRouteDistanceKm(post);
     });
 
     return { places, routes: posts.length, regions: [...regions], distanceKm };
@@ -100,7 +97,7 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
           backdropFilter: 'blur(8px)',
           zIndex: 10,
           padding: '16px 20px',
-          borderBottom: '1px solid #F1F3F5',
+          borderBottom: '1px solid var(--line)',
           display: 'flex',
           alignItems: 'center'
         }}
@@ -109,17 +106,17 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
           <button
             onClick={onClose}
             aria-label="뒤로 가기"
-            style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', marginRight: '16px' }}
+            style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--ink)', cursor: 'pointer', marginRight: '16px' }}
           >
             <i className="fas fa-arrow-left"></i>
           </button>
         )}
-        <span style={{ fontWeight: '800', fontSize: '18px', color: '#1A1A1A' }}>내 발자취</span>
+        <span style={{ fontWeight: '800', fontSize: '18px', color: 'var(--ink)' }}>내 발자취</span>
       </div>
 
       <div className="footprint-page" style={{ paddingBottom: '90px' }}>
         <div style={{ padding: '20px 20px 8px' }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#868E96' }}>여행했던 모든 순간이 여기 남아있어요</p>
+          <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>여행했던 모든 순간이 여기 남아있어요</p>
         </div>
 
         {/* 통계 */}
@@ -130,7 +127,7 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
             gap: '8px',
             margin: '12px 20px 20px',
             padding: '16px 8px',
-            background: '#F8FFF9',
+            background: 'var(--tint)',
             border: '1px solid #E6F4EA',
             borderRadius: '16px'
           }}
@@ -142,8 +139,8 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
             { value: `${stats.distanceKm.toFixed(1)}km`, label: '이동 거리' }
           ].map((item) => (
             <div key={item.label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '17px', fontWeight: 800, color: '#2D6A4F' }}>{item.value}</div>
-              <div style={{ fontSize: '11px', color: '#868E96', marginTop: '2px' }}>{item.label}</div>
+              <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--primary)' }}>{item.value}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{item.label}</div>
             </div>
           ))}
         </div>
@@ -156,16 +153,16 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
             <div
               style={{
                 height: '220px',
-                background: '#F1F3F5',
+                background: 'var(--surface-2)',
                 borderRadius: '16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#ADB5BD',
+                color: 'var(--text-faint)',
                 fontSize: '13px'
               }}
             >
-              🗺️ 아직 지도에 찍힌 발자취가 없어요
+              <i className="fa-regular fa-map ico" aria-hidden="true"></i>아직 지도에 찍힌 발자취가 없어요
             </div>
           )}
         </div>
@@ -179,13 +176,13 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
                 style={{
                   padding: '5px 12px',
                   borderRadius: '999px',
-                  background: '#EBFBEE',
-                  color: '#2B8A3E',
+                  background: 'var(--tint)',
+                  color: 'var(--primary)',
                   fontSize: '12px',
                   fontWeight: 700
                 }}
               >
-                📍 {REGION_LABELS[region] || region}
+                <i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>{REGION_LABELS[region] || region}
               </span>
             ))}
           </div>
@@ -193,18 +190,18 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
 
         {/* 타임라인 */}
         <div className="footprint-timeline">
-          <h3 style={{ padding: '0 20px', fontSize: '16px', fontWeight: 800, color: '#1A1A1A', marginBottom: '14px' }}>
-            🗓 여행 타임라인
+          <h3 style={{ padding: '0 20px', fontSize: '16px', fontWeight: 800, color: 'var(--ink)', marginBottom: '14px' }}>
+            <i className="fa-regular fa-calendar ico" aria-hidden="true"></i>여행 타임라인
           </h3>
 
           {isLoading ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#ADB5BD', fontSize: '14px' }}>
-              발자취를 불러오는 중... 🧭
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '14px' }}>
+              발자취를 불러오는 중...
             </div>
           ) : isEmpty ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#868E96' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px' }}>🏃</div>
-              <p style={{ marginBottom: '8px', fontWeight: 'bold', color: '#2C2A29' }}>아직 다녀온 여행이 없어요!</p>
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}><i className="fa-solid fa-person-hiking" aria-hidden="true"></i></div>
+              <p style={{ marginBottom: '8px', fontWeight: 'bold', color: 'var(--ink)' }}>아직 다녀온 여행이 없어요!</p>
               <p style={{ fontSize: '14px', margin: 0 }}>
                 하단 가운데 <strong>카메라</strong> 버튼을 눌러 첫 여정을 기록해보세요.
               </p>
@@ -221,7 +218,7 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
                     <div className="timeline-dot-col" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div
                         className="timeline-dot"
-                        style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#52B788', marginTop: '6px', flexShrink: 0 }}
+                        style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--primary)', marginTop: '6px', flexShrink: 0 }}
                       ></div>
                       {idx !== posts.length - 1 && (
                         <div className="timeline-line" style={{ flex: 1, width: '2px', background: '#E6F4EA', margin: '4px 0' }}></div>
@@ -236,17 +233,17 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
                       onKeyDown={(e) => e.key === 'Enter' && onOpenModal && onOpenModal(post.id)}
                       style={{ flex: 1, paddingBottom: '22px', cursor: onOpenModal ? 'pointer' : 'default' }}
                     >
-                      <div style={{ fontSize: '12px', color: '#868E96', marginBottom: '4px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
                         {/* 촬영 시각이 없는 예전 글만 게시일로 대신하고, 그 사실을 밝힌다. */}
                         {formatTripDate(route) || `${formatDateLabel(post.createdAt)} 게시`}
                       </div>
-                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#1A1A1A', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink)', marginBottom: '8px' }}>
                         {post.title || '제목 없는 여행기'}
                       </div>
 
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
                         {places.length === 0 ? (
-                          <span style={{ fontSize: '12px', color: '#ADB5BD' }}>기록된 장소 없음</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>기록된 장소 없음</span>
                         ) : (
                           places.map((place, i) => (
                             <span key={`${post.id}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -255,14 +252,14 @@ const FootprintTab = ({ currentUser, onOpenModal, onClose }) => {
                                 style={{
                                   padding: '4px 10px',
                                   borderRadius: '999px',
-                                  background: '#F1F3F5',
-                                  color: '#495057',
+                                  background: 'var(--surface-2)',
+                                  color: 'var(--text-sub)',
                                   fontSize: '12px'
                                 }}
                               >
                                 {place}
                               </span>
-                              {i < places.length - 1 && <span style={{ color: '#CED4DA' }}>›</span>}
+                              {i < places.length - 1 && <span style={{ color: 'var(--text-faint)' }}>›</span>}
                             </span>
                           ))
                         )}

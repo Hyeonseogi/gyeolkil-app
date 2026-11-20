@@ -31,10 +31,10 @@ const formatChatTime = (timestamp) => {
 
 const categoryEmoji = (category) => {
   switch (category) {
-    case 'cafe': return '☕️';
-    case 'movie': return '🎬';
-    case 'food': return '🍔';
-    default: return '🏃‍♀️';
+    case 'cafe': return 'fa-mug-hot';
+    case 'movie': return 'fa-film';
+    case 'food': return 'fa-utensils';
+    default: return 'fa-person-running';
   }
 };
 
@@ -279,7 +279,7 @@ const ChatTab = ({ currentUser }) => {
         // 퇴장 안내를 먼저 남긴다. 보안 규칙상 메시지는 참여 중인 사람만 쓸 수 있어서,
         // 멤버에서 빠진 뒤에 쓰면 거부되고 "나가기 실패"로 보인다.
         await addDoc(collection(db, 'gatherings', activeRoom.id, 'messages'), {
-          text: `👋 ${currentUser.displayName || '여행자'}님이 퇴장하셨습니다.`,
+          text: `${currentUser.displayName || '여행자'}님이 퇴장하셨습니다.`,
           userId: 'system',
           createdAt: serverTimestamp()
         });
@@ -315,10 +315,10 @@ const ChatTab = ({ currentUser }) => {
       >
         <div style={{ padding: '20px 20px 10px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '20px', color: '#111' }}>메시지</h2>
-          <div style={{ display: 'flex', gap: '8px', padding: '4px', backgroundColor: '#F1F3F5', borderRadius: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', padding: '4px', backgroundColor: 'var(--surface-2)', borderRadius: '12px' }}>
             {[
-              { key: 'private', label: '👤 개인 채팅' },
-              { key: 'gathering', label: '🗺️ 동행 채팅' }
+              { key: 'private', label: '개인 채팅' },
+              { key: 'gathering', label: '동행 채팅' }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -334,7 +334,7 @@ const ChatTab = ({ currentUser }) => {
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   backgroundColor: chatMode === tab.key ? '#fff' : 'transparent',
-                  color: chatMode === tab.key ? '#1A1A1A' : '#868E96',
+                  color: chatMode === tab.key ? 'var(--ink)' : 'var(--text-muted)',
                   boxShadow: chatMode === tab.key ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
                 }}
               >
@@ -348,12 +348,12 @@ const ChatTab = ({ currentUser }) => {
           {chatMode === 'private' && (
             <>
               <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>
                   팔로잉 친구들 (대화 시작)
                 </div>
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '14px', paddingBottom: '8px' }} className="photo-slider">
                   {followingUsers.length === 0 ? (
-                    <div style={{ fontSize: '12px', color: '#ADB5BD' }}>팔로잉 중인 친구가 없습니다.</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-faint)' }}>팔로잉 중인 친구가 없습니다.</div>
                   ) : (
                     followingUsers.map((user) => (
                       <div
@@ -393,10 +393,10 @@ const ChatTab = ({ currentUser }) => {
               </div>
 
               <div>
-                <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>최근 대화</div>
+                <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>최근 대화</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {privateRoomUsers.length === 0 ? (
-                    <div style={{ fontSize: '13px', color: '#ADB5BD', textAlign: 'center', padding: '20px 0' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-faint)', textAlign: 'center', padding: '20px 0' }}>
                       진행 중인 대화가 없습니다.
                     </div>
                   ) : (
@@ -415,7 +415,7 @@ const ChatTab = ({ currentUser }) => {
                           display: 'flex',
                           gap: '14px',
                           alignItems: 'center',
-                          border: '1px solid #F1F3F5'
+                          border: '1px solid var(--line)'
                         }}
                       >
                         <img
@@ -430,7 +430,7 @@ const ChatTab = ({ currentUser }) => {
                           <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#111', marginBottom: '4px' }}>
                             {room.user?.displayName || '여행자'}
                           </div>
-                          <div style={{ fontSize: '13px', color: '#868e96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {room.lastMessage || '새로운 대화를 시작해보세요!'}
                           </div>
                         </div>
@@ -444,10 +444,10 @@ const ChatTab = ({ currentUser }) => {
 
           {chatMode === 'gathering' && (
             <div>
-              <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#868E96' }}>참여 중인 동행</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>참여 중인 동행</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {gatheringRooms.length === 0 ? (
-                  <div style={{ fontSize: '13px', color: '#ADB5BD', textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-faint)', textAlign: 'center', padding: '40px 0' }}>
                     참여 중인 동행이 없습니다.
                     <br />홈에서 새로운 곁길을 찾아보세요!
                   </div>
@@ -467,7 +467,7 @@ const ChatTab = ({ currentUser }) => {
                         display: 'flex',
                         gap: '14px',
                         alignItems: 'center',
-                        border: '1px solid #F1F3F5',
+                        border: '1px solid var(--line)',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
                       }}
                     >
@@ -476,7 +476,7 @@ const ChatTab = ({ currentUser }) => {
                           width: '48px',
                           height: '48px',
                           borderRadius: '16px',
-                          backgroundColor: '#F1F9F5',
+                          backgroundColor: 'var(--tint)',
                           display: 'flex',
                           justifyContent: 'center',
                           alignItems: 'center',
@@ -484,18 +484,18 @@ const ChatTab = ({ currentUser }) => {
                           flexShrink: 0
                         }}
                       >
-                        {categoryEmoji(room.category)}
+                        <i className={`fa-solid ${categoryEmoji(room.category)}`} aria-hidden="true"></i>
                       </div>
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
                             {room.title}
                           </h3>
-                          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#52B788', backgroundColor: '#EBFBEE', padding: '2px 6px', borderRadius: '8px', flexShrink: 0 }}>
+                          <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--primary)', backgroundColor: 'var(--tint)', padding: '2px 6px', borderRadius: '8px', flexShrink: 0 }}>
                             {room.currentMembers?.length || 1}/{room.maxMembers}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#868e96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           방장: {room.authorName}
                         </div>
                       </div>
@@ -509,7 +509,7 @@ const ChatTab = ({ currentUser }) => {
       </div>
 
       {/* 대화 화면 */}
-      <div style={{ flex: 1, display: showList ? 'none' : 'flex', flexDirection: 'column', backgroundColor: '#F8F9FA' }}>
+      <div style={{ flex: 1, display: showList ? 'none' : 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-2)' }}>
         {activeRoom && (
           <>
             <div
@@ -526,7 +526,7 @@ const ChatTab = ({ currentUser }) => {
                 <button
                   onClick={() => setActiveRoom(null)}
                   aria-label="대화 목록으로"
-                  style={{ background: 'none', border: 'none', fontSize: '20px', color: '#1A1A1A', cursor: 'pointer', padding: '0 8px 0 0' }}
+                  style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--ink)', cursor: 'pointer', padding: '0 8px 0 0' }}
                 >
                   <i className="fas fa-chevron-left"></i>
                 </button>
@@ -541,14 +541,14 @@ const ChatTab = ({ currentUser }) => {
                       }}
                       style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
                     />
-                    <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#1A1A1A' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '16px', color: 'var(--ink)' }}>
                       {activeRoom.user?.displayName || '여행자'}
                     </div>
                   </>
                 ) : (
                   <div>
-                    <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>{activeRoom.title}</h2>
-                    <span style={{ fontSize: '12px', color: '#868E96' }}>
+                    <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--ink)', margin: 0 }}>{activeRoom.title}</h2>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                       참여자 {activeRoom.currentMembers?.length || 1}명
                     </span>
                   </div>
@@ -557,7 +557,7 @@ const ChatTab = ({ currentUser }) => {
 
               <button
                 onClick={activeRoom.type === 'gathering' ? handleLeaveGatheringRoom : handleLeavePrivateRoom}
-                style={{ background: 'none', border: 'none', fontSize: '20px', color: '#E03131', cursor: 'pointer', padding: '4px' }}
+                style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
                 title="채팅방 나가기"
                 aria-label="채팅방 나가기"
               >
@@ -567,8 +567,8 @@ const ChatTab = ({ currentUser }) => {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {visibleMessages.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#ADB5BD', fontSize: '13px', marginTop: '40px' }}>
-                  아직 대화가 없습니다. 먼저 인사를 건네보세요! 👋
+                <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: '13px', marginTop: '40px' }}>
+                  아직 대화가 없습니다. 먼저 인사를 건네보세요!
                 </div>
               )}
 
@@ -576,7 +576,7 @@ const ChatTab = ({ currentUser }) => {
                 if (msg.userId === 'system') {
                   return (
                     <div key={msg.id || index} style={{ textAlign: 'center', margin: '8px 0' }}>
-                      <span style={{ backgroundColor: 'rgba(0,0,0,0.08)', color: '#495057', fontSize: '11px', padding: '6px 14px', borderRadius: '14px', fontWeight: '500' }}>
+                      <span style={{ backgroundColor: 'rgba(0,0,0,0.08)', color: 'var(--text-sub)', fontSize: '11px', padding: '6px 14px', borderRadius: '14px', fontWeight: '500' }}>
                         {msg.text}
                       </span>
                     </div>
@@ -597,16 +597,16 @@ const ChatTab = ({ currentUser }) => {
                           }}
                           style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
                         />
-                        <span style={{ fontSize: '10px', color: '#868E96' }}>{msg.userName || msg.senderName}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{msg.userName || msg.senderName}</span>
                       </div>
                     )}
 
-                    {isMine && <span style={{ fontSize: '10px', color: '#ADB5BD', paddingBottom: '2px' }}>{formatChatTime(msg.createdAt)}</span>}
+                    {isMine && <span style={{ fontSize: '10px', color: 'var(--text-faint)', paddingBottom: '2px' }}>{formatChatTime(msg.createdAt)}</span>}
 
                     <div
                       style={{
-                        background: isMine ? '#1A1A1A' : '#fff',
-                        color: isMine ? '#fff' : '#1A1A1A',
+                        background: isMine ? 'var(--primary)' : '#fff',
+                        color: isMine ? '#fff' : 'var(--ink)',
                         padding: '12px 16px',
                         borderRadius: isMine ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
                         maxWidth: '70%',
@@ -620,7 +620,7 @@ const ChatTab = ({ currentUser }) => {
                       {msg.text}
                     </div>
 
-                    {!isMine && <span style={{ fontSize: '10px', color: '#ADB5BD', paddingBottom: '2px' }}>{formatChatTime(msg.createdAt)}</span>}
+                    {!isMine && <span style={{ fontSize: '10px', color: 'var(--text-faint)', paddingBottom: '2px' }}>{formatChatTime(msg.createdAt)}</span>}
                   </div>
                 );
               })}
@@ -629,7 +629,7 @@ const ChatTab = ({ currentUser }) => {
 
             <form
               onSubmit={handleSendMessage}
-              style={{ borderTop: '1px solid #E5E7EB', padding: '16px 20px', display: 'flex', gap: '12px', backgroundColor: '#fff' }}
+              style={{ borderTop: '1px solid var(--line)', padding: '16px 20px', display: 'flex', gap: '12px', backgroundColor: '#fff' }}
             >
               <input
                 value={newMessage}
@@ -637,7 +637,7 @@ const ChatTab = ({ currentUser }) => {
                 placeholder="메시지 입력..."
                 aria-label="메시지 입력"
                 maxLength={500}
-                style={{ flex: 1, border: 'none', backgroundColor: '#F1F3F5', borderRadius: '24px', padding: '14px 18px', outline: 'none', fontSize: '14px' }}
+                style={{ flex: 1, border: 'none', backgroundColor: 'var(--surface-2)', borderRadius: '24px', padding: '14px 18px', outline: 'none', fontSize: '14px' }}
               />
               <button
                 type="submit"
@@ -645,8 +645,8 @@ const ChatTab = ({ currentUser }) => {
                 aria-label="메시지 보내기"
                 style={{
                   border: 'none',
-                  background: newMessage.trim() ? '#52B788' : '#E9ECEF',
-                  color: newMessage.trim() ? '#fff' : '#ADB5BD',
+                  background: newMessage.trim() ? 'var(--primary)' : 'var(--surface-3)',
+                  color: newMessage.trim() ? '#fff' : 'var(--text-faint)',
                   borderRadius: '50%',
                   width: '46px',
                   height: '46px',

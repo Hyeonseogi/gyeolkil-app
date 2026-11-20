@@ -25,13 +25,13 @@ const roundCoord = (value) => Math.round(value * 1000) / 1000;
 const DEFAULT_LOCATION = { lat: 37.5445, lng: 127.056 }; // 성수역
 
 const CATEGORIES = [
-  { key: 'cafe', label: '☕️ 카페', emoji: '☕️' },
-  { key: 'food', label: '🍔 맛집', emoji: '🍔' },
-  { key: 'movie', label: '🎬 영화', emoji: '🎬' },
-  { key: 'etc', label: '🏃‍♀️ 활동', emoji: '🏃‍♀️' }
+  { key: 'cafe', label: '카페', icon: 'fa-mug-hot' },
+  { key: 'food', label: '맛집', icon: 'fa-utensils' },
+  { key: 'movie', label: '영화', icon: 'fa-film' },
+  { key: 'etc', label: '활동', icon: 'fa-person-running' }
 ];
 
-const categoryEmoji = (key) => CATEGORIES.find((c) => c.key === key)?.emoji || '🏃‍♀️';
+const categoryIcon = (key) => CATEGORIES.find((c) => c.key === key)?.icon || 'fa-person-running';
 
 const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }) => {
   const [posts, setPosts] = useState([]);
@@ -154,7 +154,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       new window.kakao.maps.CustomOverlay({
         position: new window.kakao.maps.LatLng(myLocation.lat, myLocation.lng),
         content:
-          '<div style="width:16px;height:16px;background-color:#e63946;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+          '<div style="width:16px;height:16px;background-color:var(--danger);border-radius:50%;border:3px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
         map: mapRef.current,
         zIndex: 10
       });
@@ -181,7 +181,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       content.style.cursor = 'pointer';
       content.onclick = () => onOpenModal(p.id);
       content.innerHTML =
-        '<div style="width:36px;height:36px;background-color:#F8F9FA;border-radius:50%;border:2px solid #ADB5BD;display:flex;justify-content:center;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.2);font-size:16px;">🗺️</div>';
+        '<div style="width:36px;height:36px;background-color:var(--surface-2);border-radius:50%;border:2px solid var(--line-strong);display:flex;justify-content:center;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.2);font-size:15px;color:var(--primary);"><i class="fa-solid fa-image"></i></div>';
 
       overlaysRef.current.push(
         new window.kakao.maps.CustomOverlay({
@@ -204,12 +204,12 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       content.style.alignItems = 'center';
       content.onclick = () => setSelectedGathering(g);
 
-      const iconBg = g.status === 'recruiting' ? '#52B788' : '#6C757D';
+      const iconBg = g.status === 'recruiting' ? 'var(--primary)' : 'var(--text-faint)';
       content.innerHTML = `
         <div style="width:44px;height:44px;background-color:${iconBg};border-radius:50%;border:3px solid #fff;display:flex;justify-content:center;align-items:center;box-shadow:0 4px 8px rgba(0,0,0,0.2);font-size:20px;position:relative;z-index:2;">
-          ${categoryEmoji(g.category)}
+          <i class="fa-solid ${categoryIcon(g.category)}" style="color:#fff"></i>
         </div>
-        ${g.status === 'recruiting' ? '<div style="position:absolute;width:100%;height:100%;border-radius:50%;background-color:#52B788;animation:ping 1.5s ease-in-out infinite;z-index:1;top:0;left:0;"></div>' : ''}
+        ${g.status === 'recruiting' ? '<div style="position:absolute;width:100%;height:100%;border-radius:50%;background-color:var(--primary);animation:ping 1.5s ease-in-out infinite;z-index:1;top:0;left:0;"></div>' : ''}
       `;
 
       overlaysRef.current.push(
@@ -227,7 +227,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
   // 7. 동행 모집글 작성
   const handleCreateGathering = async () => {
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
     if (!myLocation) {
@@ -262,7 +262,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       setNewCategory('cafe');
       setNewMaxMembers(4);
       setIsCreateModalOpen(false);
-      showToast('⚡ 내 주변에 동행 모집 핀을 올렸습니다! (정확한 위치는 공개되지 않아요)', 'success');
+      showToast('내 주변에 동행 모집 핀을 올렸습니다! (정확한 위치는 공개되지 않아요)', 'success');
     } catch (error) {
       console.error('동행 글 작성 실패:', error);
       showToast('모집글 등록에 실패했습니다.', 'error');
@@ -288,7 +288,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
   // 동행 참여 (정원 초과 / 중복 참여 방지)
   const handleJoinGathering = async (gathering) => {
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
 
@@ -328,7 +328,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
       });
 
       setSelectedGathering(null);
-      showToast('🎉 동행에 참여했습니다! 채팅방으로 이동합니다.', 'success');
+      showToast('동행에 참여했습니다! 채팅방으로 이동합니다.', 'success');
       if (onNavigate) onNavigate('chat');
     } catch (error) {
       console.error('동행 참여 실패:', error);
@@ -340,7 +340,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
   const handleToggleLike = async (e, post) => {
     e.stopPropagation();
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
 
@@ -376,7 +376,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
   const handleToggleSave = async (e, post) => {
     e.stopPropagation();
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
 
@@ -413,8 +413,8 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
 
   const emptyMessage =
     filter === 'following'
-      ? { emoji: '🫂', text: '팔로우한 여행자의 여정이 아직 없어요.', sub: '발견 탭에서 새로운 여행자를 찾아보세요!' }
-      : { emoji: '📭', text: '아직 등록된 여정이 없어요.', sub: '첫 번째 여정을 기록해보세요!' };
+      ? { icon: 'fa-solid fa-user-group', text: '팔로우한 여행자의 여정이 아직 없어요.', sub: '발견 탭에서 새로운 여행자를 찾아보세요!' }
+      : { icon: 'fa-regular fa-folder-open', text: '아직 등록된 여정이 없어요.', sub: '첫 번째 여정을 기록해보세요!' };
 
   return (
     <section
@@ -433,11 +433,11 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
             style={{
               padding: '6px 10px',
               borderRadius: '8px',
-              border: '1px solid #E5E7EB',
+              border: '1px solid var(--line)',
               fontSize: '12px',
               outline: 'none',
               backgroundColor: '#fff',
-              color: '#495057',
+              color: 'var(--text-sub)',
               cursor: 'pointer'
             }}
           >
@@ -460,28 +460,28 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                 borderRadius: '20px',
                 border: 'none',
                 cursor: 'pointer',
-                backgroundColor: filter === f ? '#1A1A1A' : '#F1F3F5',
-                color: filter === f ? '#fff' : '#495057',
+                backgroundColor: filter === f ? 'var(--primary)' : 'var(--surface-2)',
+                color: filter === f ? '#fff' : 'var(--text-sub)',
                 fontSize: '13px',
                 fontWeight: filter === f ? 'bold' : 'normal',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.2s'
               }}
             >
-              {f === 'all' ? '전체' : f === 'following' ? '팔로잉' : '📍 내 주변'}
+              {f === 'all' ? '전체' : f === 'following' ? '팔로잉' : '내 주변'}
             </button>
           ))}
         </div>
       </div>
 
       {/* 본문 */}
-      <div style={{ flex: 1, overflowY: 'auto', position: 'relative', backgroundColor: filter === 'nearby' ? '#e9ecef' : '#F1F3F5' }}>
+      <div style={{ flex: 1, overflowY: 'auto', position: 'relative', backgroundColor: filter === 'nearby' ? 'var(--surface-3)' : 'var(--surface-2)' }}>
         {filter === 'nearby' ? (
           <div style={{ width: '100%', height: '100%', position: 'relative' }}>
             {isLocating ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#888' }}>
-                <i className="fas fa-location-arrow" style={{ fontSize: '24px', marginBottom: '12px', color: '#52B788' }}></i>
-                <div>현재 위치를 찾고 있습니다... 📡</div>
+                <i className="fas fa-location-arrow" style={{ fontSize: '24px', marginBottom: '12px', color: 'var(--primary)' }}></i>
+                <div>현재 위치를 찾고 있습니다...</div>
               </div>
             ) : (
               <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }}></div>
@@ -499,7 +499,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                   borderRadius: '999px',
                   padding: '8px 16px',
                   fontSize: '12px',
-                  color: '#495057',
+                  color: 'var(--text-sub)',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                   whiteSpace: 'nowrap'
                 }}
@@ -516,7 +516,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                   bottom: '24px',
                   right: '16px',
                   zIndex: 15,
-                  backgroundColor: '#52B788',
+                  backgroundColor: 'var(--primary)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '30px',
@@ -563,24 +563,24 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                           fontSize: '11px',
                           fontWeight: 'bold',
                           marginBottom: '8px',
-                          backgroundColor: selectedGathering.status === 'recruiting' ? '#EBFBEE' : '#F1F3F5',
-                          color: selectedGathering.status === 'recruiting' ? '#2B8A3E' : '#868E96'
+                          backgroundColor: selectedGathering.status === 'recruiting' ? 'var(--tint)' : 'var(--surface-2)',
+                          color: selectedGathering.status === 'recruiting' ? 'var(--primary)' : 'var(--text-muted)'
                         }}
                       >
-                        {selectedGathering.status === 'recruiting' ? '🔥 모집 중' : '🔒 모집 마감'}
+                        {selectedGathering.status === 'recruiting' ? '모집 중' : '모집 마감'}
                       </span>
-                      <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: 0 }}>{selectedGathering.title}</h3>
+                      <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0 }}>{selectedGathering.title}</h3>
                     </div>
                     <button
                       onClick={() => setSelectedGathering(null)}
                       aria-label="닫기"
-                      style={{ background: 'none', border: 'none', fontSize: '20px', color: '#ADB5BD', cursor: 'pointer' }}
+                      style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--text-faint)', cursor: 'pointer' }}
                     >
                       <i className="fas fa-times"></i>
                     </button>
                   </div>
 
-                  <p style={{ fontSize: '14px', color: '#495057', lineHeight: '1.5', marginBottom: '16px', whiteSpace: 'pre-wrap' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--text-sub)', lineHeight: '1.5', marginBottom: '16px', whiteSpace: 'pre-wrap' }}>
                     {selectedGathering.body}
                   </p>
 
@@ -594,11 +594,11 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                         style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
                         alt=""
                       />
-                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#495057' }}>{selectedGathering.authorName}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-sub)' }}>{selectedGathering.authorName}</span>
                     </div>
-                    <span style={{ color: '#DEE2E6' }}>|</span>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#495057' }}>
-                      인원 현황 <span style={{ color: '#52B788' }}>{selectedGathering.currentMembers?.length || 1}</span> / {selectedGathering.maxMembers}명
+                    <span style={{ color: 'var(--line)' }}>|</span>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-sub)' }}>
+                      인원 현황 <span style={{ color: 'var(--primary)' }}>{selectedGathering.currentMembers?.length || 1}</span> / {selectedGathering.maxMembers}명
                     </span>
                   </div>
 
@@ -610,8 +610,8 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                         padding: '16px',
                         borderRadius: '14px',
                         border: 'none',
-                        backgroundColor: '#ffe3e3',
-                        color: '#e63946',
+                        backgroundColor: 'var(--danger-tint)',
+                        color: 'var(--danger)',
                         fontSize: '15px',
                         fontWeight: 'bold',
                         cursor: 'pointer'
@@ -634,8 +634,8 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                             padding: '16px',
                             borderRadius: '14px',
                             border: 'none',
-                            backgroundColor: disabled ? '#E9ECEF' : '#1A1A1A',
-                            color: disabled ? '#ADB5BD' : '#fff',
+                            backgroundColor: disabled ? 'var(--surface-3)' : 'var(--primary)',
+                            color: disabled ? 'var(--text-faint)' : '#fff',
                             fontSize: '15px',
                             fontWeight: 'bold',
                             cursor: disabled ? 'default' : 'pointer'
@@ -677,18 +677,18 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: 0 }}>🙋‍♂️ 새로운 동행 만들기</h3>
+                    <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: 0 }}><i className="fa-solid fa-user-plus ico" aria-hidden="true"></i>새로운 동행 만들기</h3>
                     <button
                       onClick={() => setIsCreateModalOpen(false)}
                       aria-label="닫기"
-                      style={{ background: 'none', border: 'none', fontSize: '20px', color: '#ADB5BD', cursor: 'pointer' }}
+                      style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--text-faint)', cursor: 'pointer' }}
                     >
                       <i className="fas fa-times"></i>
                     </button>
                   </div>
 
                   <div>
-                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#868E96', display: 'block', marginBottom: '8px' }}>카테고리</span>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>카테고리</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {CATEGORIES.map((cat) => (
                         <button
@@ -698,15 +698,15 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                           style={{
                             padding: '8px 14px',
                             borderRadius: '10px',
-                            border: newCategory === cat.key ? '2px solid #52B788' : '1px solid #E5E7EB',
-                            backgroundColor: newCategory === cat.key ? '#F1F9F5' : '#fff',
-                            color: newCategory === cat.key ? '#2D6A4F' : '#495057',
+                            border: newCategory === cat.key ? '2px solid var(--primary)' : '1px solid var(--line)',
+                            backgroundColor: newCategory === cat.key ? 'var(--tint)' : '#fff',
+                            color: newCategory === cat.key ? 'var(--primary)' : 'var(--text-sub)',
                             fontSize: '13px',
                             fontWeight: '600',
                             cursor: 'pointer'
                           }}
                         >
-                          {cat.label}
+                          <i className={`fa-solid ${cat.icon} ico`} aria-hidden="true"></i>{cat.label}
                         </button>
                       ))}
                     </div>
@@ -718,7 +718,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                     value={newTitle}
                     maxLength={40}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '14px', outline: 'none' }}
+                    style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--line)', fontSize: '14px', outline: 'none' }}
                   />
 
                   <textarea
@@ -726,11 +726,11 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                     value={newBody}
                     maxLength={300}
                     onChange={(e) => setNewBody(e.target.value)}
-                    style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '14px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+                    style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid var(--line)', fontSize: '14px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
                   />
 
                   <div>
-                    <label htmlFor="max-members" style={{ fontSize: '12px', fontWeight: 'bold', color: '#868E96', display: 'block', marginBottom: '8px' }}>
+                    <label htmlFor="max-members" style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
                       최대 인원 설정 ({newMaxMembers}명)
                     </label>
                     <input
@@ -740,7 +740,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                       max="8"
                       value={newMaxMembers}
                       onChange={(e) => setNewMaxMembers(Number(e.target.value))}
-                      style={{ width: '100%', accentColor: '#52B788' }}
+                      style={{ width: '100%', accentColor: 'var(--primary)' }}
                     />
                   </div>
 
@@ -752,7 +752,7 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
                       padding: '16px',
                       borderRadius: '14px',
                       border: 'none',
-                      backgroundColor: isSubmitting ? '#A5D6BC' : '#52B788',
+                      backgroundColor: isSubmitting ? 'var(--primary-disabled)' : 'var(--primary)',
                       color: '#fff',
                       fontSize: '15px',
                       fontWeight: 'bold',
@@ -772,12 +772,12 @@ const HomeTab = ({ currentUser, following, onOpenModal, onOpenUser, onNavigate }
           <div id="feed-container" style={{ paddingBottom: '80px' }}>
             {isLoading ? (
               <div className="loading-spinner" style={{ textAlign: 'center', padding: '50px', color: '#888' }}>
-                여정을 불러오는 중... 🧭
+                여정을 불러오는 중...
               </div>
             ) : displayPosts.length === 0 ? (
-              <div className="empty-state" style={{ padding: '60px 20px', textAlign: 'center', color: '#868E96' }}>
-                <div style={{ fontSize: '40px', marginBottom: '16px' }}>{emptyMessage.emoji}</div>
-                <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: '#495057' }}>{emptyMessage.text}</p>
+              <div className="empty-state" style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '40px', marginBottom: '16px' }}><i className={emptyMessage.icon} aria-hidden="true"></i></div>
+                <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: 'var(--text-sub)' }}>{emptyMessage.text}</p>
                 <p style={{ margin: 0, fontSize: '14px' }}>{emptyMessage.sub}</p>
               </div>
             ) : (

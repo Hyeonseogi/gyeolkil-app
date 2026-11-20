@@ -218,7 +218,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
   const handleToggleLike = async (e, post) => {
     e.stopPropagation();
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
 
@@ -257,7 +257,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
   const handleToggleSave = async (e, post) => {
     e.stopPropagation();
     if (!currentUser) {
-      showToast('로그인이 필요합니다. 🔒', 'error');
+      showToast('로그인이 필요합니다.', 'error');
       return;
     }
 
@@ -312,31 +312,31 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
       style={{ overflowY: 'auto', backgroundColor: '#fff', height: '100%', display: 'flex', flexDirection: 'column' }}
     >
       {/* 검색 + 인기 태그 */}
-      <div style={{ padding: '20px 16px 0', backgroundColor: '#fff', borderBottom: '1px solid #F1F3F5' }}>
+      <div style={{ padding: '20px 16px 0', backgroundColor: '#fff', borderBottom: '1px solid var(--line)' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            backgroundColor: '#F8F9FA',
+            backgroundColor: 'var(--surface-2)',
             padding: '12px 16px',
             borderRadius: '16px',
             boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
           }}
         >
-          <i className="fas fa-search" style={{ color: '#ADB5BD', marginRight: '10px', fontSize: '16px' }}></i>
+          <i className="fas fa-search" style={{ color: 'var(--text-faint)', marginRight: '10px', fontSize: '16px' }}></i>
           <input
             type="text"
             placeholder="여행지, 코스, 장소 검색..."
             aria-label="여정 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ border: 'none', background: 'transparent', flex: 1, outline: 'none', fontSize: '15px', color: '#1A1A1A' }}
+            style={{ border: 'none', background: 'transparent', flex: 1, outline: 'none', fontSize: '15px', color: 'var(--ink)' }}
           />
           {search && (
             <button
               onClick={() => setSearch('')}
               aria-label="검색어 지우기"
-              style={{ background: 'none', border: 'none', color: '#ADB5BD', cursor: 'pointer', padding: '0 4px' }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', padding: '0 4px' }}
             >
               <i className="fas fa-times-circle" style={{ fontSize: '16px' }}></i>
             </button>
@@ -360,9 +360,9 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                   fontWeight: 'bold',
                   fontSize: '13px',
                   transition: 'all 0.2s',
-                  border: isActive ? 'none' : '1px solid #E5E7EB',
-                  backgroundColor: isActive ? '#1A1A1A' : '#fff',
-                  color: isActive ? '#fff' : '#495057'
+                  border: isActive ? 'none' : '1px solid var(--line)',
+                  backgroundColor: isActive ? 'var(--primary)' : '#fff',
+                  color: isActive ? '#fff' : 'var(--text-sub)'
                 }}
               >
                 {tag}
@@ -375,12 +375,12 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {/* 인기 코스 */}
         <div className="discover-section" style={{ padding: '20px 16px', backgroundColor: '#fff' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: '0 0 16px' }}>🔥 인기 코스</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: '0 0 16px' }}><i className="fa-solid fa-fire ico" aria-hidden="true"></i>인기 코스</h3>
 
           <div className="routes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             {isLoading && popularPosts.length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: '#ADB5BD', fontSize: '14px' }}>
-                인기 루트를 분석 중입니다... 🧐
+              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '14px' }}>
+                인기 루트를 분석 중입니다...
               </div>
             ) : popularPosts.length > 0 ? (
               popularPosts.map((post) => {
@@ -396,13 +396,13 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                     style={{
                       cursor: 'pointer',
                       borderRadius: '16px',
-                      border: '1px solid #E5E7EB',
+                      border: '1px solid var(--line)',
                       overflow: 'hidden',
                       backgroundColor: '#fff',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
                     }}
                   >
-                    <div style={{ height: '110px', backgroundColor: '#F8F9FA', position: 'relative' }}>
+                    <div style={{ height: '110px', backgroundColor: 'var(--surface-2)', position: 'relative' }}>
                       {thumb ? (
                         <img src={thumb} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
@@ -430,7 +430,7 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                         style={{
                           fontSize: '14px',
                           fontWeight: 'bold',
-                          color: '#1A1A1A',
+                          color: 'var(--ink)',
                           margin: '0 0 4px 0',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -439,13 +439,13 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                       >
                         {post.title}
                       </h4>
-                      <p style={{ fontSize: '12px', color: '#868E96', margin: 0 }}>📍 {countPlaces(post.route)}개의 스팟</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}><i className="fa-solid fa-location-dot ico" aria-hidden="true"></i>장소 {countPlaces(post.route)}곳</p>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: '#ADB5BD' }}>
+              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'var(--text-faint)' }}>
                 아직 인기 게시물이 없습니다.
               </div>
             )}
@@ -453,8 +453,8 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
         </div>
 
         {/* 지역 필터 */}
-        <div style={{ padding: '0 0 16px', backgroundColor: '#fff', borderBottom: '8px solid #F1F3F5' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1A1A1A', margin: '0 16px 12px' }}>🗺️ 어디로 떠날까요?</h3>
+        <div style={{ padding: '0 0 16px', backgroundColor: '#fff', borderBottom: '8px solid var(--line)' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', margin: '0 16px 12px' }}><i className="fa-regular fa-map ico" aria-hidden="true"></i>어디로 떠날까요?</h3>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '0 16px 8px' }} className="photo-slider">
             {regionKeys.map((key) => (
               <button
@@ -466,8 +466,8 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
                   borderRadius: '24px',
                   border: 'none',
                   cursor: 'pointer',
-                  backgroundColor: region === key ? '#52B788' : '#F8F9FA',
-                  color: region === key ? '#fff' : '#495057',
+                  backgroundColor: region === key ? 'var(--primary)' : 'var(--surface-2)',
+                  color: region === key ? '#fff' : 'var(--text-sub)',
                   fontSize: '14px',
                   fontWeight: region === key ? 'bold' : '600',
                   whiteSpace: 'nowrap',
@@ -483,16 +483,16 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
         </div>
 
         {/* 피드 */}
-        <div id="feed-container" style={{ paddingBottom: '80px', backgroundColor: '#F1F3F5' }}>
+        <div id="feed-container" style={{ paddingBottom: '80px', backgroundColor: 'var(--surface-2)' }}>
           {isLoading ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#ADB5BD' }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)' }}>
               <i className="fas fa-compass fa-spin" style={{ fontSize: '24px', marginBottom: '12px' }}></i>
               <div style={{ fontSize: '14px' }}>새로운 곁길을 탐색 중입니다...</div>
             </div>
           ) : filteredPosts.length === 0 ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: '#ADB5BD' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-              <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#495057', margin: '0 0 8px' }}>조건에 맞는 여정이 없어요</h3>
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-faint)' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}><i className="fa-regular fa-folder-open" aria-hidden="true"></i></div>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-sub)', margin: '0 0 8px' }}>조건에 맞는 여정이 없어요</h3>
               <p style={{ fontSize: '14px', margin: 0 }}>다른 검색어나 지역을 선택해 보세요.</p>
             </div>
           ) : (
@@ -512,13 +512,13 @@ const DiscoverTab = ({ currentUser, onOpenModal = () => {}, onOpenUser = () => {
           {!isLoading && hasMore && <div ref={loadMoreRef} style={{ height: '24px', width: '100%' }} />}
 
           {isLoadingMore && (
-            <div style={{ textAlign: 'center', padding: '18px 0 28px', color: '#ADB5BD', fontSize: '13px' }}>
+            <div style={{ textAlign: 'center', padding: '18px 0 28px', color: 'var(--text-faint)', fontSize: '13px' }}>
               <i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>여정을 더 불러오는 중...
             </div>
           )}
 
           {!isLoading && !hasMore && filteredPosts.length > 0 && (
-            <div style={{ textAlign: 'center', padding: '24px 0 32px', color: '#ADB5BD', fontSize: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '24px 0 32px', color: 'var(--text-faint)', fontSize: '12px' }}>
               더 이상 불러올 여정이 없습니다.
             </div>
           )}

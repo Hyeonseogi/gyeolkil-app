@@ -6,6 +6,7 @@ import { auth, db, missingFirebaseKeys } from './firebase';
 import LoginScreen from './components/LoginScreen';
 import PostDetailModal from './components/PostDetailModal';
 import SetupNotice from './components/SetupNotice';
+import Logo, { LogoMark } from './components/Logo';
 
 import HomeTab from './pages/HomeTab';
 import DiscoverTab from './pages/DiscoverTab';
@@ -178,7 +179,8 @@ function App() {
     return (
       <div id="splash-screen">
         <div className="splash-content">
-          <div className="loading-spinner" style={{ color: '#fff' }}>연결 중... 🧭</div>
+          <LogoMark size={64} background="#FFFFFF" foreground="var(--primary)" title="곁길" />
+          <div className="loading-spinner splash-spinner">연결 중...</div>
         </div>
       </div>
     );
@@ -197,9 +199,10 @@ function App() {
             tabIndex={0}
             onClick={() => setActiveTab('home')}
             onKeyDown={(e) => e.key === 'Enter' && setActiveTab('home')}
-            style={{ cursor: 'pointer' }}
+            aria-label="곁길 홈으로"
+            style={{ cursor: 'pointer', display: 'inline-flex' }}
           >
-            🗺️ 곁길
+            <Logo />
           </span>
         </div>
 
@@ -221,7 +224,7 @@ function App() {
                   minWidth: unreadCount > 9 ? '20px' : '18px',
                   height: '18px',
                   padding: unreadCount > 9 ? '0 4px' : 0,
-                  background: '#ff0f7b',
+                  background: 'var(--danger)',
                   color: '#fff',
                   fontSize: '10px',
                   fontWeight: '800',
@@ -229,8 +232,7 @@ function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: '999px',
-                  border: '2px solid #fff',
-                  boxShadow: '0 4px 12px rgba(255, 15, 123, 0.35)'
+                  border: '2px solid #fff'
                 }}
               >
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -253,7 +255,7 @@ function App() {
         style={{
           zIndex: 1100,
           background: '#ffffff',
-          color: '#1A1A1A',
+          color: 'var(--ink)',
           width: 'min(390px, 94vw)',
           boxShadow: '-10px 0 30px rgba(0,0,0,0.12)'
         }}
@@ -262,18 +264,18 @@ function App() {
           className="panel-header"
           style={{
             padding: '20px',
-            borderBottom: '1px solid #E9ECEF',
+            borderBottom: '1px solid var(--line)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             background: '#ffffff'
           }}
         >
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1A1A1A' }}>알림</h3>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--ink)' }}>알림</h3>
 
           <button
             onClick={closeAllPanels}
-            style={{ background: 'none', border: 'none', fontSize: '20px', color: '#868E96', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', fontSize: '20px', color: 'var(--text-muted)', cursor: 'pointer' }}
             aria-label="알림 닫기"
           >
             <i className="fas fa-times"></i>
@@ -286,7 +288,7 @@ function App() {
               style={{
                 textAlign: 'center',
                 padding: '72px 20px',
-                color: '#868E96',
+                color: 'var(--text-muted)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
@@ -312,12 +314,12 @@ function App() {
                   style={{
                     position: 'relative',
                     padding: '18px 18px 16px',
-                    borderBottom: '1px solid #F1F3F5',
+                    borderBottom: '1px solid var(--line)',
                     display: 'flex',
                     gap: '12px',
                     alignItems: 'flex-start',
                     cursor: 'pointer',
-                    backgroundColor: notif.read ? '#ffffff' : '#F8FFF9',
+                    backgroundColor: notif.read ? '#ffffff' : 'var(--tint)',
                     transition: 'background-color 0.2s'
                   }}
                 >
@@ -333,7 +335,7 @@ function App() {
                         height: '42px',
                         borderRadius: '50%',
                         objectFit: 'cover',
-                        border: '1px solid #E9ECEF'
+                        border: '1px solid var(--line)'
                       }}
                     />
                     <div
@@ -359,9 +361,9 @@ function App() {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0, paddingRight: '14px' }}>
-                    <p style={{ margin: 0, fontSize: '15px', color: '#1A1A1A', lineHeight: '1.45', fontWeight: '700' }}>
+                    <p style={{ margin: 0, fontSize: '15px', color: 'var(--ink)', lineHeight: '1.45', fontWeight: '700' }}>
                       {title}
-                      <span style={{ color: '#868E96', fontWeight: '500' }}> · {formatNotificationTime(notif.createdAt)}</span>
+                      <span style={{ color: 'var(--text-muted)', fontWeight: '500' }}> · {formatNotificationTime(notif.createdAt)}</span>
                     </p>
 
                     {preview && (
@@ -369,7 +371,7 @@ function App() {
                         style={{
                           margin: '6px 0 0',
                           fontSize: '14px',
-                          color: '#495057',
+                          color: 'var(--text-sub)',
                           lineHeight: '1.45',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -427,8 +429,8 @@ function App() {
         {activeTab === 'record' && (
           <Suspense
             fallback={
-              <div style={{ padding: '80px 20px', textAlign: 'center', color: '#ADB5BD' }}>
-                기록 도구를 준비하는 중... 📷
+              <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--text-faint)' }}>
+                기록 도구를 준비하는 중...
               </div>
             }
           >
@@ -509,7 +511,7 @@ function App() {
               height: '28px',
               borderRadius: '50%',
               objectFit: 'cover',
-              border: activeTab === 'mypage' || activeTab === 'footprint' ? '2px solid #52B788' : '2px solid transparent'
+              border: activeTab === 'mypage' || activeTab === 'footprint' ? '2px solid var(--primary)' : '2px solid transparent'
             }}
           />
         </button>
